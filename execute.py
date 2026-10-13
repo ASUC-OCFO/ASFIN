@@ -1,61 +1,65 @@
+"""Command-line entry point for the generic ASFIN processing workflow."""
+
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
-import sys
+from typing import Sequence
 
 from ASFINT.Pipeline.workflow import run
 from ASFINT.Utility.Utils import ensure_folder
 
-def main(manual=None, args=None):
-    if manual is not None:
-        # Programmatic call, no CLI parsing
-        print(f"Initiating Manual Run...")
-        run(
-            pull_path=manual.get('pullPath'), 
-            push_path=manual.get('pushPath'), 
-            process_type=manual.get('processType'),
-        )
-        return
-    
-    parser = argparse.ArgumentParser(description="Run ASUCProcessor pipeline locally.")
-    parser.add_argument(
-        "--input", "-i", type=str, default="files/input",
-        help="Path to input folder or file"
-    )
-    parser.add_argument(
-        "--output", "-o", type=str, default="files/output",
-        help="Path to output folder"
-    )
-    parser.add_argument(
-        "--process", "-p", type=str, default="fr",
-        help="Type of processing (e.g., fr, absa, agenda)"
-    )
-    parser.add_argument(
-        "--reporting", "-r", type=bool, default=True,
-        help="Toggling debugging prints"
-    )
 
-    args = parser.parse_args()
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run an ASFIN processor locally.")
+    parser.add_argument(
+        "--input",
+        "-i",
+        type=Path,
+        default=Path("files/input"),
+        help="Input file or directory",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=Path("files/output"),
+        help="Output directory",
+    )
+    parser.add_argument(
+        "--process",
+        "-p",
+        default="fr",
+        help="Processor type, such as fr, absa, or agenda",
+    )
+    parser.add_argument(
+        "--reporting",
+        "-r",
+        action="store_true",
+        help="Enable processor reporting output",
+    )
+    return parser
 
-    # Resolve paths
-    pull_path = Path(args.input).resolve()
-    push_path = Path(args.output).resolve()
 
-    # Create folders if missing
-    if pull_path.is_dir():
-        ensure_folder(pull_path)
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    pull_path = args.input.expanduser().resolve()
+    push_path = args.output.expanduser().resolve()
+
+    if not pull_path.exists():
+        raise FileNotFoundError(f"Input path does not exist: {pull_path}")
+
     ensure_folder(push_path)
 
-    # Run pipeline
-    run(pull_path=str(pull_path), push_path=str(push_path), process_type=args.process, reporting=args.reporting)
+    run(
+        pull_path=str(pull_path),
+        push_path=str(push_path),
+        process_type=args.process,
+        reporting=args.reporting,
+    )
+    return 0
+
 
 if __name__ == "__main__":
-    MANUAL = False
-    if MANUAL:
-        settings = {
-            'pullPath': '/Users/jonathanngai/Desktop/ASUC Research/ASFIN/files/input', 
-            'pushPath': '/Users/jonathanngai/Desktop/ASUC Research/ASFIN/files/output', 
-            'processType': 'ABSA'
-        }
-        main(manual=settings)
-        sys.exit(1)
-    main()
+    raise SystemExit(main())

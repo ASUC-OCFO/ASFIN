@@ -3,10 +3,7 @@ import pandas as pd
 from collections.abc import Iterable
 from typing import Dict, Any
 from pathlib import Path
-# import spacy
-# nlp_model = spacy.load("en_core_web_md")
 from sklearn.metrics.pairwise import cosine_similarity 
-# from rapidfuzz import fuzz, process
 
 from ASFINT.Utility.Cleaning import is_type, in_df, any_in_df, is_valid_iter, any_drop
 

@@ -1,14 +1,8 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
+
 
 setup(
     name="ASFINT",
     version="0.1",
-    packages=find_packages(),  # Automatically detects your package folders
-    install_requires=[
-        "numpy",
-        "pandas", 
-        "scikit-learn", 
-        "spacy", 
-        "rapidfuzz",
-    ],
+    packages=find_packages(),
 )

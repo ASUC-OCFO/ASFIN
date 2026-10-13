@@ -1,3 +1,5 @@
+-r requirements.txt
+
 fastapi==0.133.1
 uvicorn==0.41.0
 SQLAlchemy==2.0.47
@@ -5,9 +7,6 @@ alembic==1.18.4
 psycopg2-binary
 pydantic==2.12.5
 pydantic-settings==2.13.1
-pyarrow
-pandas
 python-multipart
 httpx
-pytest==9.0.2
 python-dotenv==1.2.1

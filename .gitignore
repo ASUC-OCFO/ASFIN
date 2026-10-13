@@ -28,8 +28,13 @@ htmlcov/
 credentials.json
 details.json
 
-# Logs
-logs/
+# Local data and generated files
+/data/
+/files/
+/logs/
+*.db
+*.sqlite
+*.sqlite3
 *.log
 
 # OS / editor
