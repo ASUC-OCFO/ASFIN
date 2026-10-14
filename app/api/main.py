@@ -6,15 +6,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routers import datasets, ingestions, process_types, publish
-from app.core.database import check_connection, engine
-from app.core.models import Base
+from app.core.database import check_connection
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
     yield
 
 

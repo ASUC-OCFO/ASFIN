@@ -24,7 +24,7 @@ class Dataset(Base):
     schema_def = Column(JSON, nullable=True)      # list of {name, dtype} column descriptors
     validation_cfg = Column(JSON, nullable=True)  # per-validator config overrides
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    is_deleted = Column(Boolean, default=False, nullable=False)
+    is_deleted = Column(Boolean, default=False, server_default='false', nullable=False)
 
 
 class DatasetUpload(Base):
@@ -49,7 +49,7 @@ class Ingestion(Base):
     id = Column(Integer, primary_key=True, index=True)
     dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
     # pending → processing → validated / validation_failed → clean_ready / failed
-    status = Column(String, nullable=False, default="pending", index=True)
+    status = Column(String, nullable=False, default="pending", server_default="pending", index=True)
     original_filename = Column(String, nullable=False)
     file_ext = Column(String, nullable=False)
     raw_path = Column(String, nullable=True)
@@ -74,7 +74,7 @@ class ValidationResult(Base):
     ingestion_id = Column(Integer, ForeignKey("ingestions.id"), nullable=False, index=True)
     check_name = Column(String, nullable=False)
     status = Column(String, nullable=False)  # pass / fail / warn / skipped
-    severity = Column(String, nullable=False, default="error")  # error / warning / info
+    severity = Column(String, nullable=False, default="error", server_default="error")  # error / warning / info
     details = Column(JSON, nullable=True)    # machine-readable specifics (e.g. missing columns)
     message = Column(Text, nullable=True)
     ran_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -92,4 +92,4 @@ class PublishedVersion(Base):
     file_sha256 = Column(String(64), nullable=True)
     published_at = Column(DateTime(timezone=True), server_default=func.now())
     published_by = Column(String, nullable=True)
-    is_latest = Column(Boolean, default=True, nullable=False)
+    is_latest = Column(Boolean, default=True, server_default='true', nullable=False)
