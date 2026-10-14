@@ -1,6 +1,32 @@
-logs
+# Git and repository metadata
 .git
-README.md
 .github
-*.pyc
+
+# Python
 __pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment and secrets
+.env
+.env.*
+credentials.json
+details.json
+
+# Local data and generated files
+/data/
+/files/
+/logs/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Project documentation is not needed in the API image
+README.md

@@ -1,29 +1,160 @@
-# Introduction
-ASUC Finance Transformations (ASFINT) is a library containing rudimentary cleaning and transformation scripts that are used to process raw data into cleaned datasets meant to serve as the source of truth on the OCFO Financial Database's warehouse level. 
-Functions are design both to be called manually for manual cleaning of records and integrated into automatic workflows for realtime cleaning and integration into the OCFO Database system. 
+# ASFIN
 
-ASFINT does NOT contain any scripts beyond the data transformation scripts and is agnostic to backend platforms supporting data push and pull functionalities to external cloud platforms. 
+ASFIN contains data processing tools used by the ASUC Office of the Chief Financial Officer (OCFO) to clean, standardize, and reconcile financial and organizational data.
 
-# How to run the workflow
-First make a conda enviornment with the necessary dependencies. Move to the root of this repo then type the following into your terminal 
-- `conda create -n ASFINT0.1 python=3.11.8`
-- `conda activate ASFINT0.1`
-- `pip install -r requirements.txt`
-- `pip install -e .`
+The repository supports two main local workflows:
 
-If you have errors with this step check your working directory with `pwd` and make sure the returned path ends with `ASFIN`. Eg: 
-`/Users/yourusername/Desktop/ASFIN`
+- A general processor interface through `execute.py`
+- A Finance Committee FR/Agenda batch workflow through `run_ficomm.py`
 
-Then make sure you have files to clean. All raw files to be cleaned should be inputted into `ASFIN/files/input` and the resulting cleaned files should be outputted into `ASFIN/files/output`. If these folders do not exist please make them. 
+Processing logic is organized under `ASFINT/`, with dataset-specific transformations in `ASFINT/Transform/` and shared workflow logic in `ASFINT/Pipeline/`.
 
-Then set the settings you need in `execute.py`. The only thing you have to change is the `processType` field in the `settings` dictionary for different kinds of datasets. **If you're cleaning the FR dataset use the `FR` process type.**
+## Setup
 
-Then start running the workflow. Make sure you're in the working directory, your terminal should display something like this:
-`(ASFINT0.1) yourusername@wifi-XX-XX-XX-XXX ASFIN % `
+From the repository root, create and activate a Python environment, then install the project dependencies:
 
-Then type in: `python execute.py` and you should be good. 
+```bash
+python -m venv .venv
+source .venv/bin/activate
 
-Debug as needed. 
+pip install -r requirements.txt
+pip install -e .
+```
 
-# How does ASFIN work?
-The main ETL functions labelled pull, process and push are located in `ASFINT/Pipeline/workflow.py`. Files in the root like `execute.py` (execites programmatically) and `run.py` (executes via terminal) call the entire workflow to run. `ASFINT/Transform/processory.py` contains all the nitty gritty transformation functions and `ASFINT/Config/config.py` contains all the settings for different datasets/process types the workflow expects and currently supports. 
+Python 3.12 is recommended for local development.
+
+For API development and the full test suite, install the development dependencies instead:
+
+```bash
+pip install -r requirements.dev.txt
+pip install -e .
+```
+
+`requirements.dev.txt` includes both the core processing dependencies and the API dependencies.
+
+## General Processing
+
+`execute.py` is the generic command-line entry point for processors configured in ASFIN.
+
+A typical command looks like:
+
+```bash
+python execute.py   --input files/input   --output files/output   --process fr
+```
+
+The arguments are:
+
+- `--input`, `-i`: input file or directory to process
+- `--output`, `-o`: directory where processed files should be written
+- `--process`, `-p`: processor type, such as `fr`, `absa`, or `agenda`
+- `--reporting`, `-r`: optional flag that enables processor reporting output
+
+For example, to process files in `files/input` with the ABSA processor and write results to `files/output`:
+
+```bash
+python execute.py   --input files/input   --output files/output   --process absa
+```
+
+The generic workflow is implemented in `ASFINT/Pipeline/workflow.py`. It loads the source files, routes them to the selected processor, and writes the resulting output.
+
+## FiComm FR/Agenda Processing
+
+`run_ficomm.py` processes a full academic year of Finance Committee Financial Request (FR) spreadsheets together with the corresponding Agenda/Minutes documents.
+
+The command requires three directories:
+
+```bash
+python run_ficomm.py   --agendas /path/to/agenda-directory   --frs /path/to/fr-directory   --output /path/to/output-directory
+```
+
+For example, with an academic-year folder structured as:
+
+```text
+example-year/
+  agendas/
+    Fall/
+    Spring/
+  resolutions/
+    Fall/
+    Spring/
+```
+
+the pipeline can be run with:
+
+```bash
+python run_ficomm.py   --agendas example-year/agendas   --frs example-year/resolutions   --output example-year/processed
+```
+
+The agenda and FR directories may contain semester subdirectories. The pipeline searches them recursively, identifies the meeting week and date for each source file, and pairs the corresponding FR and Agenda records.
+
+For each meeting week, the pipeline:
+
+- Cleans the FR spreadsheet and parses decisions from the Agenda/Minutes document.
+- Reconciles corresponding records while preserving values from both sources, including records that appear in only one source.
+- Records review flags for conditions that may require manual review, such as date discrepancies, ambiguous name matches, malformed source text, or missing inputs.
+- Copies the source inputs into the processed week directory and writes the cleaned and merged CSV outputs.
+
+A processed year is organized by meeting week and date. For example:
+
+```text
+processed/
+  F1_YYYY-MM-DD/
+    F1_YYYY-MM-DD_FR.xlsx
+    F1_YYYY-MM-DD_Agenda.docx
+    F1_YYYY-MM-DD_FR_cleaned.csv
+    F1_YYYY-MM-DD_Agenda_cleaned.csv
+    F1_YYYY-MM-DD_merged.csv
+  F2_YYYY-MM-DD/
+    ...
+  manifest.csv
+  review_flags.csv
+  review_summary.csv
+```
+
+`manifest.csv` summarizes each processed week, including source filenames, row counts, warnings, and errors. `review_flags.csv` contains individual items that may require manual review, while `review_summary.csv` summarizes those flags by type.
+
+The Finance Committee workflow is implemented primarily in:
+
+- `ASFINT/Pipeline/workflow.py`
+- `ASFINT/Transform/FR_Processor.py`
+- `ASFINT/Transform/Agenda_Processor.py`
+- `ASFINT/Transform/Reconciliation_Processor.py`
+- `ASFINT/Utility/Matching.py`
+
+## API
+
+The FastAPI application is defined in `app/api/main.py`. The API layer is separate from the local processing commands and uses the processing and storage components under `ASFINT/` and `app/`.
+
+For local API development, install `requirements.dev.txt`. The Docker configuration runs the application with `app.api.main:app`.
+
+## Tests
+
+Run the FiComm pipeline tests with:
+
+```bash
+python -m pytest tests/test_ficomm_pipeline.py -q
+```
+
+Run the full repository test suite, including the API tests under `app/tests/`, with:
+
+```bash
+python -m pytest -q
+```
+
+## Repository Structure
+
+```text
+ASFINT/
+  Config/       Processor configuration
+  Pipeline/     Workflow orchestration
+  Pull/         Input loading
+  Push/         Output writing
+  Transform/    Dataset-specific processors
+  Utility/      Shared utilities
+  Validation/   Validation helpers
+
+app/            API, services, storage, and API tests
+tests/          Processing pipeline tests
+execute.py      Generic processing CLI
+run_ficomm.py   FiComm FR/Agenda batch processing CLI
+```

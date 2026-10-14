@@ -48,7 +48,18 @@ PROCESS_TYPES = {
             'date format':"%m-%d-%Y",
             'raw name dependency':["Date", "Numbering", "Coding"],
         }
-    }
+    },
+    'RECONCILE': {
+        'pull': pull_reconcile,
+        'push': push_csv,
+        'process': ASUCProcessor('RECONCILE'),
+        'naming': {
+            'raw tag': "RF",
+            'clean tag': "GF",
+            'clean file name': "Reconciled",
+            'raw name dependency': ["Date"],
+        },
+    },
 }
 
 def get_pFuncs(process_type: str, func: str) -> Callable: 

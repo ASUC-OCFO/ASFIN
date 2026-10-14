@@ -22,6 +22,7 @@ from ASFINT.Transform.ABSA_Processor import ABSA_Processor
 from ASFINT.Transform.Agenda_Processor import Agenda_Processor
 from ASFINT.Transform.OASIS_Processor import OASIS_Abridged
 from ASFINT.Transform.FR_Processor import FR_ProcessorV2
+from ASFINT.Transform.Reconciliation_Processor import Reconcile_FR_Agenda
 
 
 class ASUCProcessor:
@@ -41,6 +42,7 @@ class ASUCProcessor:
             "OASIS": self.oasis,
             "FR": self.fr,
             "CONTINGENCY": self.contingency,
+            "RECONCILE": self.reconcile,
         }
 
     # --------------------------
@@ -250,7 +252,7 @@ class ASUCProcessor:
     # --------------------------
     # CONTINGENCY
     # --------------------------
-    def contingency(self, dfs: Iterable[pd.DataFrame], names: Iterable[str], reporting: bool = False) -> Tuple[List[pd.DataFrame], List[str]]:
+    def contingency(self, dfs: Iterable[str], names: Iterable[str], reporting: bool = False) -> Tuple[List[pd.DataFrame], List[str]]:
         dfs = list(dfs)
         names = list(names)
         names = self.name_clean(names=names, subst_name="Agenda", reporting=reporting)
@@ -258,16 +260,40 @@ class ASUCProcessor:
         out_frames: List[pd.DataFrame] = []
         out_names: List[str] = []
 
-        for df, name in zip(dfs, names):
-            assert isinstance(df, pd.DataFrame), "expected a pandas DataFrame"
+        for txt, name in zip(dfs, names):
+            assert isinstance(txt, str), "expected a text string for CONTINGENCY"
             try:
                 fn = self.get_processing_func()
-                processed = fn(df)
+                processed, _date = fn(txt)  # Agenda_Processor returns (df, date)
                 out_frames.append(processed)
                 out_names.append(self.get_file_naming())
                 self._log(f"[CONTINGENCY] Processed '{name}' via {fn.__name__}", reporting)
             except Exception as e:
                 self._log(f"[CONTINGENCY] Failed '{name}': {e}", reporting)
+                raise
+        return out_frames, out_names
+
+    # --------------------------
+    # RECONCILE
+    # --------------------------
+    def reconcile(self, dfs: Iterable, names: Iterable[str], reporting: bool = False) -> Tuple[List[pd.DataFrame], List[str]]:
+        dfs = list(dfs)
+        names = list(names)
+
+        out_frames: List[pd.DataFrame] = []
+        out_names: List[str] = []
+
+        for item, name in zip(dfs, names):
+            if not isinstance(item, (tuple, list)) or len(item) != 3:
+                raise ValueError(f"[RECONCILE] Expected (fr_df, agenda_df, fr_filename) tuple at '{name}'")
+            fr_df, agenda_df, fr_filename = item
+            try:
+                processed = Reconcile_FR_Agenda(fr_df, agenda_df)
+                out_frames.append(processed)
+                out_names.append(f"Reconciled-{fr_filename}" if fr_filename else "Reconciled")
+                self._log(f"[RECONCILE] Processed '{name}' via Reconcile_FR_Agenda", reporting)
+            except Exception as e:
+                self._log(f"[RECONCILE] Failed '{name}': {e}", reporting)
                 raise
         return out_frames, out_names
 

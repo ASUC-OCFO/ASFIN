@@ -1,157 +1,327 @@
-import pandas as pd
-import re
+from __future__ import annotations
+
 from datetime import datetime
-import argparse
-from ASFINT.Utility.Utils import heading_finder
-from ASFINT.Utility.Cleaning import in_df
+import re
+from typing import Optional
 
-def _row_has(tokens, row) -> bool:
-    """Return True if all tokens are present in the given row (as strings)."""
-    s = set(str(x).strip() for x in row.tolist())
-    return all(t in s for t in tokens)
+import numpy as np
+import pandas as pd
 
-def _promote_header(block: pd.DataFrame, header_row_idx: int) -> pd.DataFrame:
-    """Use the values of header_row_idx as column names and return rows beneath it."""
-    header = block.loc[header_row_idx].astype(str).str.strip().tolist()
-    out = block.loc[header_row_idx + 1 :].copy()
-    out.columns = header
-    out = out.reset_index(drop=True)
-    return out
+
+FR_COLUMNS = [
+    "Appx.",
+    "Org Name",
+    "Request Type",
+    "Org Type (year)",
+    "Amount Requested",
+    "Amount",
+    "Committee Status",
+    "Funding Source",
+    "Primary Contact",
+    "Email Address",
+    "Date",
+]
+
 
 def _sanitize_date_for_filename(date_str: str) -> str:
     return str(date_str).replace("/", "-").replace("\\", "-").replace(":", "-")
 
+
+def _compact(value: object) -> str:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return ""
+    return re.sub(r"\s+", " ", str(value).strip())
+
+
+def FR_Embedded_Date(df: pd.DataFrame) -> Optional[str]:
+    """Return the first date embedded in an FR sheet as YYYY-MM-DD."""
+    if df is None or df.empty:
+        return None
+    patterns = [
+        (r"\b(\d{1,2}/\d{1,2}/20\d{2})\b", "%m/%d/%Y"),
+        (r"\b(20\d{2}-\d{1,2}-\d{1,2})\b", "%Y-%m-%d"),
+    ]
+    for i in range(min(12, len(df))):
+        for value in df.iloc[i].astype(str).tolist():
+            for pattern, source_format in patterns:
+                match = re.search(pattern, value)
+                if not match:
+                    continue
+                try:
+                    return datetime.strptime(match.group(1), source_format).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+    return None
+
+
+def _extract_date(df: pd.DataFrame, txt: str, date_format: str) -> str:
+    embedded = FR_Embedded_Date(df)
+    if embedded:
+        return datetime.strptime(embedded, "%Y-%m-%d").strftime(date_format)
+    if txt:
+        for pattern, source_format in [
+            (r"\b(\d{1,2}/\d{1,2}/20\d{2})\b", "%m/%d/%Y"),
+            (r"\b(20\d{2}-\d{1,2}-\d{1,2})\b", "%Y-%m-%d"),
+        ]:
+            match = re.search(pattern, str(txt))
+            if match:
+                try:
+                    return datetime.strptime(match.group(1), source_format).strftime(date_format)
+                except ValueError:
+                    pass
+    return "undated"
+
+
+def _header_rows(df: pd.DataFrame) -> list[int]:
+    rows: list[int] = []
+    for i in range(len(df)):
+        values = {_compact(x).lower() for x in df.iloc[i].tolist()}
+        if {"org name", "request type"}.issubset(values) and any(v.startswith("appx") for v in values):
+            rows.append(i)
+    return rows
+
+
+def _column_index(header: pd.Series, *names: str) -> Optional[int]:
+    wanted = {_compact(name).lower() for name in names}
+    for idx, value in enumerate(header.tolist()):
+        if _compact(value).lower() in wanted:
+            return idx
+    return None
+
+
+def _email_column_index(header: pd.Series, block: pd.DataFrame) -> Optional[int]:
+    explicit = _column_index(header, "Email Address", "Email")
+    if explicit is not None:
+        return explicit
+
+    best_idx = None
+    best_count = 0
+    for idx in range(block.shape[1]):
+        count = block.iloc[:, idx].astype(str).str.contains(r"@", regex=True, na=False).sum()
+        if count > best_count:
+            best_idx = idx
+            best_count = int(count)
+    return best_idx if best_count > 0 else None
+
+
+def _valid_data_rows(block: pd.DataFrame) -> pd.DataFrame:
+    if block.empty:
+        return block
+    appx = block["Appx."].map(_compact)
+    org = block["Org Name"].map(_compact)
+    mask = appx.ne("") & ~appx.str.lower().str.startswith("appx") & org.ne("") & org.str.lower().ne("nan")
+    return block.loc[mask].reset_index(drop=True)
+
+
+def _normalize_request_type(value: object) -> object:
+    text = _compact(value)
+    low = text.lower()
+    if not text:
+        return np.nan
+    if "contingency" in low:
+        return "Contingency"
+    if "finance" in low or "rule waiver" in low:
+        return "Finance Rule"
+    if "space" in low:
+        return "Space Reservation"
+    if "sponsor" in low:
+        return "Sponsorship"
+    if "senate" in low or low.startswith("sr "):
+        return "Senate Bill"
+    return text
+
+
+def _normalize_status(value: object) -> object:
+    text = _compact(value)
+    if not text:
+        return np.nan
+    low = text.lower().replace("indefinetly", "indefinitely")
+    if "table" in low and "indefinit" in low:
+        return "Tabled Indefinitely"
+    if "table" in low:
+        return "Tabled"
+    if "partial" in low and "approv" in low:
+        return "Partially Approved"
+    if "recommend" in low and "approv" in low:
+        return "Recommended for approval"
+    if "approv" in low:
+        return "Approved"
+    if "denied" in low or "deny" in low:
+        return "Denied"
+    if "forward" in low and "senate" in low:
+        return "Forwarded to Senate"
+    return text
+
+
+def _numeric(value: object) -> Optional[float]:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return float(value)
+    text = _compact(value).replace("$", "").replace(",", "")
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _request_table(df: pd.DataFrame, header_idx: int, end_idx: int) -> pd.DataFrame:
+    header = df.iloc[header_idx]
+    rows = df.iloc[header_idx + 1 : end_idx].copy()
+
+    indices = {
+        "Appx.": _column_index(header, "Appx.", "Appx"),
+        "Org Name": _column_index(header, "Org Name"),
+        "Request Type": _column_index(header, "Request Type"),
+        "Org Type (year)": _column_index(header, "Org Type (year)", "Org Type"),
+        "Amount Requested": _column_index(header, "Amount Requested"),
+        "Funding Source": _column_index(header, "Funding Source"),
+        "Primary Contact": _column_index(header, "Primary Contact"),
+        "Email Address": _email_column_index(header, rows),
+    }
+
+    out = pd.DataFrame(index=rows.index)
+    for name, idx in indices.items():
+        out[name] = rows.iloc[:, idx] if idx is not None else np.nan
+
+    out = _valid_data_rows(out)
+    out["Request Type"] = out["Request Type"].map(_normalize_request_type)
+    return out
+
+
+def _decision_table(df: pd.DataFrame, header_idx: int) -> pd.DataFrame:
+    header = df.iloc[header_idx]
+    rows = df.iloc[header_idx + 1 :].copy()
+
+    appx_idx = _column_index(header, "Appx.", "Appx")
+    org_idx = _column_index(header, "Org Name")
+    status_idx = _column_index(header, "Committee Status")
+    amount_idx = _column_index(header, "Amount", "Amount Approved")
+
+    # Some historical sheets store the decision in a column labeled for the
+    # request amount or granted amount.
+    combined_idx = None
+    if status_idx is None and amount_idx is None:
+        combined_idx = _column_index(header, "Amount Requested", "Amount Granted")
+
+    out = pd.DataFrame(index=rows.index)
+    out["Appx."] = rows.iloc[:, appx_idx] if appx_idx is not None else np.nan
+    out["Decision Org Name"] = rows.iloc[:, org_idx] if org_idx is not None else np.nan
+    out["Committee Status"] = rows.iloc[:, status_idx] if status_idx is not None else np.nan
+    out["Amount"] = rows.iloc[:, amount_idx] if amount_idx is not None else np.nan
+    out["_combined_decision"] = rows.iloc[:, combined_idx] if combined_idx is not None else np.nan
+
+    # Remove repeated headings and blank trailing rows before matching decisions.
+    appx = out["Appx."].map(_compact)
+    org = out["Decision Org Name"].map(_compact)
+    mask = appx.ne("") & ~appx.str.lower().str.startswith("appx") & org.ne("") & org.str.lower().ne("nan")
+    return out.loc[mask].reset_index(drop=True)
+
+
+def _apply_decisions(requests: pd.DataFrame, decisions: pd.DataFrame) -> pd.DataFrame:
+    out = requests.copy()
+    out["Amount"] = pd.Series(np.nan, index=out.index, dtype="float64")
+    out["Committee Status"] = pd.Series(pd.NA, index=out.index, dtype="object")
+    if decisions.empty:
+        return out
+
+    decision_by_appx = decisions.drop_duplicates(subset=["Appx."], keep="first").set_index("Appx.")
+    for idx, row in out.iterrows():
+        appx = row.get("Appx.")
+        if appx not in decision_by_appx.index:
+            continue
+        decision = decision_by_appx.loc[appx]
+
+        status = _normalize_status(decision.get("Committee Status"))
+        amount = _numeric(decision.get("Amount"))
+        combined = decision.get("_combined_decision")
+
+        if pd.isna(status) and combined is not None and not pd.isna(combined):
+            numeric = _numeric(combined)
+            if numeric is not None:
+                amount = numeric
+                requested = _numeric(row.get("Amount Requested"))
+                if requested is not None and abs(requested - numeric) <= 0.005:
+                    status = "Approved"
+                else:
+                    status = "Partially Approved"
+            else:
+                status = _normalize_status(combined)
+
+        out.at[idx, "Amount"] = amount if amount is not None else np.nan
+        out.at[idx, "Committee Status"] = status
+
+    return out
+
+
 def FR_Helper(df):
-    """
-    Split raw FR sheet into two DataFrames:
-      - requests_df: contains Amount Requested
-      - decisions_df: contains Committee Status + Amount Approved
-    Both are cropped starting at 'Appx' and filtered by allowed FY24 alphabet.
-    """
-    # Find starting point (first "Appx")
-    start_idx = df.index[df.iloc[:, 0].astype(str).str.contains("Appx", na=False)]
-    if len(start_idx) == 0:
+    """Backward-compatible helper returning the raw sheet and detected tables."""
+    if df is None or df.empty:
         return df, None, None
-    start = start_idx[0]
+    headers = _header_rows(df)
+    if not headers:
+        return df, None, None
+    requests = _request_table(df, headers[0], headers[1] if len(headers) > 1 else len(df))
+    decisions = _decision_table(df, headers[1]) if len(headers) > 1 else None
+    return df, requests, decisions
 
-    # Allowed labels (A-Z, AA-AZ, BB-ZZ)
-    allowed = set(
-        [chr(c) for c in range(65, 91)] +
-        [f"A{chr(c)}" for c in range(65, 91)] +
-        [f"B{chr(c)}" for c in range(65, 91)]
-    )
 
-    # Crop to rows after "Appx"
-    cropped = df.iloc[start + 1:].copy()
-    cropped = cropped[cropped.iloc[:, 0].astype(str).isin(allowed)]
+def FR_ProcessorV2(
+    df: pd.DataFrame,
+    txt: str = "",
+    date_format: str = "%m/%d/%Y",
+    original_filename: str | None = None,
+):
+    """Clean one Finance Resolution spreadsheet.
 
-    # Now split into two subtables: requests vs committee decisions
-    # Assumption: the raw file stacks two tables vertically with same headers
-    header_row = cropped.columns.tolist()
-    if "Amount Requested" in header_row and "Committee Status" in header_row:
-        # Already unified, rare case
-        return cropped, None, None
-
-    # Otherwise, detect split by column names
-    request_cols = [c for c in cropped.columns if "Requested" in str(c)]
-    decision_cols = [c for c in cropped.columns if "Approved" in str(c) or "Committee" in str(c)]
-
-    if not request_cols or not decision_cols:
-        # Could not split
-        return cropped, None, None
-
-    requests_df = cropped.loc[:, [c for c in cropped.columns if "Requested" in str(c) or c in ["Appx", "Org Name", "Request Type", "Org Type", "Funding Source", "Primary Contact", "Email Address"]]]
-    decisions_df = cropped.loc[:, [c for c in cropped.columns if "Approved" in str(c) or "Committee" in str(c) or c in ["Appx", "Org Name"]]]
-
-    return cropped, requests_df, decisions_df
-
-def FR_ProcessorV2(df: pd.DataFrame, txt: str, date_format: str):
+    Finance Resolution sheets contain a request table followed by a committee
+    decision table. Historical sheets occasionally repeat the request header for
+    the decision table, so table boundaries are identified by repeated Appx/Org
+    Name/Request Type headers instead of relying on the decision column name.
     """
-    Merge FR sheet's two stacked tables by ['Appx.', 'Org Name']:
-      - Table 1 is preserved (columns/values untouched)
-      - Table 2 contributes 'Amount' and 'Committee Status'
-    Output columns (when present):
-      ['Appx.', 'Org Name', 'Request Type', 'Org Type (year)',
-       'Amount Requested', 'Amount', 'Committee Status',
-       'Funding Source', 'Primary Contact', 'Email Address']
-    """
-    # 1) name from date in companion text
-    m = re.search(r"(\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2})", str(txt) or "")
-    safe_date = _sanitize_date_for_filename(m.group(1) if m else "undated")
-    out_name = f"FR_clean_{safe_date}"
+    extracted_date = _extract_date(df, txt, date_format)
+
+    if original_filename:
+        base_name = re.sub(r"\.(csv|xlsx|xls|gsheet)$", "", original_filename, flags=re.I)
+        base_name = re.sub(r"\([\d]+\)", "", base_name).strip()
+        base_name = base_name.replace(" - Sheet1", "").replace("- Sheet1", "").strip()
+        out_name = f"{base_name} Cleaned"
+    else:
+        out_name = f"FR_clean_{_sanitize_date_for_filename(extracted_date)}"
 
     if df is None or df.empty:
-        return {out_name: pd.DataFrame()}
+        return {out_name: pd.DataFrame(columns=FR_COLUMNS)}
 
-    # 2) start scan near first "Appx" occurrence in first column
-    start_idx = 0
-    for i in range(min(len(df), 200)):
-        v = str(df.iloc[i, 0])
-        if "Appx" in v:
-            start_idx = i
-            break
-    sheet = df.iloc[start_idx:].reset_index(drop=True)
+    headers = _header_rows(df)
+    if not headers:
+        return {out_name: pd.DataFrame(columns=FR_COLUMNS)}
 
-    # 3) detect header rows for table1 (requests) and table2 (decisions)
-    t1_hdr = t2_hdr = None
-    scan_limit = min(100, len(sheet))
-    for i in range(scan_limit):
-        row = sheet.iloc[i]
-        if t1_hdr is None and _row_has(["Appx.", "Org Name", "Amount Requested"], row):
-            t1_hdr = i
-            continue
-        # table2 header can vary; accept either Committee Status or Amount
-        if _row_has(["Appx.", "Org Name", "Committee Status"], row) or _row_has(["Appx.", "Org Name", "Amount"], row):
-            t2_hdr = i
-            if t1_hdr is not None and t2_hdr > t1_hdr:
-                break
+    requests = _request_table(df, headers[0], headers[1] if len(headers) > 1 else len(df))
+    decisions = _decision_table(df, headers[1]) if len(headers) > 1 else pd.DataFrame()
+    cleaned = _apply_decisions(requests, decisions)
+    cleaned["Date"] = extracted_date
 
-    # if we can't confidently split, just return the visible portion as-is
-    if t1_hdr is None or t2_hdr is None or t2_hdr <= t1_hdr:
-        return {out_name: sheet}
+    for col in FR_COLUMNS:
+        if col not in cleaned.columns:
+            cleaned[col] = np.nan
+    cleaned = cleaned[FR_COLUMNS].reset_index(drop=True)
+    return {out_name: cleaned}
 
-    # 4) promote headers and slice blocks
-    table1 = _promote_header(sheet, t1_hdr)
-    cutoff = max(0, t2_hdr - t1_hdr - 1)
-    if cutoff > 0:
-        table1 = table1.iloc[:cutoff].copy()
 
-    table2 = _promote_header(sheet, t2_hdr)
-
-    # 5) normalize some header variants for joining/selection
-    # "Appx" variants
-    for tbl in (table1, table2):
-        if "Appx" in tbl.columns and "Appx." not in tbl.columns:
-            tbl.rename(columns={"Appx": "Appx."}, inplace=True)
-        if "Org Type" in tbl.columns and "Org Type (year)" not in tbl.columns:
-            tbl.rename(columns={"Org Type": "Org Type (year)"}, inplace=True)
-        # sometimes 'Email' instead of 'Email Address'
-        if "Email" in tbl.columns and "Email Address" not in tbl.columns:
-            tbl.rename(columns={"Email": "Email Address"}, inplace=True)
-        # amount column on table2 could be 'Amount Approved' -> map to 'Amount'
-        if "Amount Approved" in tbl.columns and "Amount" not in tbl.columns:
-            tbl.rename(columns={"Amount Approved": "Amount"}, inplace=True)
-
-    # 6) build the left (table1) exactly as user wants to preserve
-    left_keep = ["Appx.", "Org Name", "Request Type", "Org Type (year)",
-                 "Amount Requested", "Funding Source", "Primary Contact", "Email Address"]
-    left = table1[[c for c in left_keep if c in table1.columns]].copy()
-
-    # 7) build the right (table2) with only the two fields we want to add
-    right_keep = ["Appx.", "Org Name", "Amount", "Committee Status"]
-    right = table2[[c for c in right_keep if c in table2.columns]].copy()
-
-    # 8) merge (left-join; do not alter left values)
-    join_keys = [k for k in ["Appx.", "Org Name"] if k in left.columns and k in right.columns]
-    if len(join_keys) < 2:
-        merged = left  # cannot join reliably; return table1 only
-    else:
-        merged = left.merge(right, on=join_keys, how="left")
-
-    # 9) final column order
-    final_cols = ["Appx.", "Org Name", "Request Type", "Org Type (year)",
-                  "Amount Requested", "Amount", "Committee Status",
-                  "Funding Source", "Primary Contact", "Email Address"]
-    final = merged[[c for c in final_cols if c in merged.columns]].copy()
-
-    return {out_name: final}
+def FR_ProcessorV2_Multi(
+    dfs_with_txt: list,
+    date_format: str = "%Y-%m-%d",
+    original_filenames: list | None = None,
+):
+    all_results = {}
+    for idx, pair in enumerate(dfs_with_txt):
+        if not isinstance(pair, (tuple, list)) or len(pair) != 2:
+            raise ValueError(f"Expected (df, txt) tuple at index {idx}, got {type(pair)}")
+        df, txt = pair
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError(f"Expected pandas DataFrame at index {idx}, got {type(df)}")
+        original = original_filenames[idx] if original_filenames and idx < len(original_filenames) else None
+        all_results.update(FR_ProcessorV2(df, txt, date_format, original_filename=original))
+    return all_results

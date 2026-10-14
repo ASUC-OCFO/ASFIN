@@ -1,10 +1,10 @@
-numpy
-pandas
-scikit-learn
+numpy==1.26.4
+pandas==2.2.3
+openpyxl==3.1.5
+scikit-learn==1.7.2
+pyarrow==21.0.0
+pandas-gbq==0.29.2
+rapidfuzz==3.10.1
+tqdm==4.67.1
 
-pyarrow
-pandas-gbq
-
-rapidfuzz
-
-tqdm
+python-docx==1.2.0

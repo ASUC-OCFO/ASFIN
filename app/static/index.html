@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASFINT Data Platform</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #f1f5f9;
+      --surface:     #ffffff;
+      --surface-2:   #f8fafc;
+      --border:      #e2e8f0;
+      --text:        #0f172a;
+      --text-2:      #475569;
+      --text-3:      #94a3b8;
+      --primary:     #1e3a5f;
+      --primary-lt:  #eff6ff;
+      --primary-h:   #152c47;
+      --accent:      #2563eb;
+      --success:     #166534;
+      --success-bg:  #dcfce7;
+      --warn:        #92400e;
+      --warn-bg:     #fef3c7;
+      --danger:      #991b1b;
+      --danger-bg:   #fee2e2;
+      --purple:      #5b21b6;
+      --purple-bg:   #f5f3ff;
+      --sidebar-w:   272px;
+      --r:           8px;
+      --sh:          0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+      --sh-md:       0 4px 12px rgba(0,0,0,.08);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ─── Header ─────────────────────────────────── */
+    .hdr {
+      height: 50px;
+      background: var(--primary);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 10px;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .hdr-logo { font-size: 1rem; font-weight: 700; color: #fff; letter-spacing: .04em; }
+    .hdr-sep  { color: rgba(255,255,255,.25); }
+    .hdr-sub  { font-size: .75rem; color: rgba(255,255,255,.5); }
+    .hdr-pill {
+      font-size: .65rem; font-weight: 700;
+      background: rgba(255,255,255,.12); color: rgba(255,255,255,.7);
+      padding: 2px 8px; border-radius: 99px; letter-spacing: .05em;
+    }
+    .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .hdr-dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; }
+    .hdr-conn { font-size: .72rem; color: rgba(255,255,255,.4); }
+
+    /* ─── Layout ─────────────────────────────────── */
+    .layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* ─── Sidebar ────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+    .sb-top { padding: 14px; border-bottom: 1px solid var(--border); }
+    .sb-list { padding: 10px 8px; flex: 1; }
+    .sb-label {
+      font-size: .65rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .09em;
+      color: var(--text-3); margin-bottom: 8px; padding: 0 4px;
+    }
+    .ds-item {
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 2px;
+      transition: background .12s;
+    }
+    .ds-item:hover { background: var(--bg); }
+    .ds-item.active { background: var(--primary-lt); }
+    .ds-item-name {
+      font-size: .86rem; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ds-item.active .ds-item-name { color: var(--accent); }
+    .ds-item-row {
+      display: flex; align-items: center; gap: 5px; margin-top: 2px;
+    }
+    .type-pill {
+      font-size: .62rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 99px;
+      background: var(--primary-lt); color: var(--accent);
+    }
+    .ds-item-date { font-size: .7rem; color: var(--text-3); }
+    .sb-empty { font-size: .8rem; color: var(--text-3); padding: 12px 4px; }
+
+    /* ─── Main ───────────────────────────────────── */
+    .main { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* ─── Welcome ────────────────────────────────── */
+    .welcome {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; text-align: center; padding: 60px;
+    }
+    .welcome-icon { font-size: 2.5rem; }
+    .welcome-title { font-size: 1rem; font-weight: 700; }
+    .welcome-sub { font-size: .85rem; color: var(--text-3); }
+
+    /* ─── Cards ──────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--sh);
+    }
+    .card-hdr {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .card-title {
+      font-size: .72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em; color: var(--text-3);
+    }
+    .card-body { padding: 18px; }
+    .card-footer {
+      padding: 12px 18px; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+
+    /* ─── Buttons ────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 8px 14px; border-radius: 6px; font-size: .84rem;
+      font-weight: 600; cursor: pointer; border: none;
+      transition: all .15s; font-family: inherit;
+    }
+    .btn-primary  { background: var(--primary); color: #fff; }
+    .btn-primary:hover  { background: var(--primary-h); }
+    .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-accent   { background: var(--accent); color: #fff; }
+    .btn-accent:hover   { background: #1d4ed8; }
+    .btn-success  { background: #16a34a; color: #fff; }
+    .btn-success:hover  { background: #15803d; }
+    .btn-success:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-ghost {
+      background: transparent; color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--bg); }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-sm  { padding: 5px 10px; font-size: .76rem; }
+    .btn-full { width: 100%; justify-content: center; }
+
+    /* ─── Forms ──────────────────────────────────── */
+    .frow { margin-bottom: 14px; }
+    .frow:last-child { margin-bottom: 0; }
+    .flabel {
+      display: block; font-size: .78rem; font-weight: 600;
+      color: var(--text-2); margin-bottom: 5px;
+    }
+    .flabel-hint { font-weight: 400; color: var(--text-3); margin-left: 4px; }
+    .finput, .fselect, .ftextarea {
+      width: 100%; padding: 8px 11px;
+      border: 1px solid var(--border); border-radius: 6px;
+      font-size: .88rem; color: var(--text); background: #fff;
+      outline: none; transition: border-color .15s, box-shadow .15s;
+      font-family: inherit;
+    }
+    .finput:focus, .fselect:focus, .ftextarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    .ftextarea { resize: vertical; min-height: 62px; }
+
+    /* ─── File drop ──────────────────────────────── */
+    .drop {
+      border: 2px dashed var(--border); border-radius: var(--r);
+      padding: 28px 16px; text-align: center;
+      cursor: pointer; background: var(--surface-2);
+      transition: all .15s;
+    }
+    .drop:hover, .drop.over { border-color: var(--accent); background: var(--primary-lt); }
+    .drop input { display: none; }
+    .drop-icon { font-size: 1.8rem; margin-bottom: 6px; }
+    .drop-txt  { font-size: .83rem; color: var(--text-3); }
+    .drop-file { font-size: .83rem; color: var(--accent); font-weight: 600; margin-top: 5px; }
+    .drop-sm   { padding: 14px 12px; }
+
+    /* ─── Tabs ───────────────────────────────────── */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 18px; }
+    .tab {
+      padding: 10px 14px; font-size: .82rem; font-weight: 600;
+      color: var(--text-3); cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: all .15s;
+    }
+    .tab:hover { color: var(--text-2); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ─── Status badges ──────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: .68rem; font-weight: 700; padding: 3px 8px;
+      border-radius: 99px; white-space: nowrap;
+    }
+    .b-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+    .b-pending       { background: var(--warn-bg);    color: var(--warn);    }
+    .b-processing    { background: var(--purple-bg);  color: var(--purple);  }
+    .b-validating    { background: var(--purple-bg);  color: var(--purple);  }
+    .b-validated     { background: #dbeafe;            color: #1d4ed8;        }
+    .b-clean_ready   { background: var(--success-bg); color: var(--success); }
+    .b-failed        { background: var(--danger-bg);  color: var(--danger);  }
+    .b-validation_failed { background: var(--danger-bg); color: var(--danger); }
+    .b-published     { background: #d1fae5;            color: #065f46;        }
+    .b-pass          { background: var(--success-bg); color: var(--success); }
+    .b-fail          { background: var(--danger-bg);  color: var(--danger);  }
+    .b-warn          { background: var(--warn-bg);    color: var(--warn);    }
+    .b-skipped       { background: #f1f5f9;            color: #64748b;        }
+
+    /* ─── Ingestion rows ─────────────────────────── */
+    .ing-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 14px; border-radius: 6px; border: 1px solid var(--border);
+      margin-bottom: 7px; cursor: pointer; transition: all .12s;
+    }
+    .ing-row:last-child { margin-bottom: 0; }
+    .ing-row:hover  { border-color: var(--accent); background: var(--primary-lt); }
+    .ing-row.active { border-color: var(--accent); background: var(--primary-lt); }
+    .ing-left  { flex: 1; min-width: 0; }
+    .ing-name  { font-size: .87rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ing-meta  { font-size: .71rem; color: var(--text-3); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ─── Meta grid ──────────────────────────────── */
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+    }
+    .meta-item-lbl {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--text-3); margin-bottom: 3px;
+    }
+    .meta-item-val { font-size: .87rem; font-weight: 500; word-break: break-all; }
+    .meta-mono { font-family: "SF Mono", "Fira Code", monospace; font-size: .8rem; color: var(--text-2); }
+
+    /* ─── Pipeline stepper ───────────────────────── */
+    .pipeline {
+      display: flex; align-items: center; gap: 0;
+      padding: 14px 18px; overflow-x: auto;
+    }
+    .step {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 10px; border-radius: 99px; font-size: .73rem; font-weight: 600;
+      white-space: nowrap; color: var(--text-3); transition: all .2s;
+    }
+    .step.done  { background: var(--success-bg); color: var(--success); }
+    .step.cur   { background: var(--primary-lt); color: var(--accent); }
+    .step.err   { background: var(--danger-bg);  color: var(--danger); }
+    .step-arrow { color: var(--text-3); font-size: .7rem; flex-shrink: 0; }
+
+    /* ─── Validation grid ────────────────────────── */
+    .val-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+    .val-card {
+      padding: 14px; border-radius: 6px; border: 1px solid var(--border);
+      cursor: pointer; transition: all .12s; border-left-width: 3px;
+    }
+    .val-card:hover { box-shadow: var(--sh-md); }
+    .val-card.pass { border-left-color: #22c55e; }
+    .val-card.fail { border-left-color: #ef4444; }
+    .val-card.warn { border-left-color: #f59e0b; }
+    .val-card.skipped { border-left-color: #cbd5e1; }
+    .val-name { font-size: .8rem; font-weight: 700; text-transform: capitalize; margin-bottom: 7px; }
+    .val-msg  { font-size: .75rem; color: var(--text-2); margin-top: 6px; line-height: 1.4; }
+    .val-detail {
+      margin-top: 10px; background: var(--bg);
+      border-radius: 5px; padding: 10px;
+      font-size: .73rem; font-family: "SF Mono", "Fira Code", monospace;
+      white-space: pre-wrap; word-break: break-all; color: var(--text-2);
+      max-height: 180px; overflow-y: auto; display: none;
+    }
+
+    /* ─── Version rows ───────────────────────────── */
+    .ver-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border);
+      margin-bottom: 7px; font-size: .83rem; flex-wrap: wrap;
+    }
+    .ver-row:last-child { margin-bottom: 0; }
+    .ver-num { font-weight: 700; color: var(--text-2); font-size: .75rem; flex-shrink: 0; }
+    .ver-table {
+      font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; font-family: "SF Mono","Fira Code",monospace; font-size: .8rem;
+      color: var(--text);
+    }
+    .ver-rows { color: var(--text-3); font-size: .75rem; white-space: nowrap; }
+    .ver-date { color: var(--text-3); font-size: .72rem; white-space: nowrap; }
+    .ver-actions { display: flex; gap: 5px; flex-shrink: 0; }
+
+    /* ─── Error banner ───────────────────────────── */
+    .err-banner {
+      padding: 10px 14px; border-radius: 6px;
+      background: var(--danger-bg); color: var(--danger);
+      font-size: .82rem; line-height: 1.5; margin-top: 14px;
+      display: none;
+    }
+
+    /* ─── Toasts ─────────────────────────────────── */
+    .toast-wrap {
+      position: fixed; bottom: 20px; right: 20px;
+      display: flex; flex-direction: column; gap: 7px; z-index: 999;
+    }
+    .toast {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 11px 14px; border-radius: var(--r);
+      font-size: .84rem; font-weight: 500; box-shadow: var(--sh-md);
+      min-width: 220px; max-width: 360px; animation: tin .2s ease;
+    }
+    @keyframes tin { from { transform: translateY(8px); opacity: 0; } }
+    .toast-success { background: var(--success-bg); color: var(--success); border-left: 3px solid #22c55e; }
+    .toast-error   { background: var(--danger-bg);  color: var(--danger);  border-left: 3px solid #ef4444; }
+    .toast-info    { background: #dbeafe;            color: #1d4ed8;        border-left: 3px solid #3b82f6; }
+    .toast-icon    { font-size: 1rem; flex-shrink: 0; }
+    .toast-msg     { flex: 1; }
+
+    /* ─── Modal ──────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.4);
+      z-index: 200; display: none; align-items: center; justify-content: center;
+    }
+    .overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 12px;
+      width: 430px; max-width: 95vw;
+      box-shadow: 0 24px 48px rgba(0,0,0,.2);
+    }
+    .modal-hdr {
+      padding: 17px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title { font-size: .97rem; font-weight: 700; }
+    .modal-close {
+      background: none; border: none; font-size: 1.1rem;
+      cursor: pointer; color: var(--text-3); padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .modal-close:hover { background: var(--bg); }
+    .modal-body   { padding: 18px 20px; }
+    .modal-footer { padding: 13px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* ─── Dataset header ─────────────────────────── */
+    .ds-hdr { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .ds-hdr-left { flex: 1; min-width: 0; }
+    .ds-name { font-size: 1.15rem; font-weight: 700; }
+    .ds-desc { font-size: .83rem; color: var(--text-3); margin-top: 2px; }
+    .ds-type-pill {
+      font-size: .75rem; font-weight: 700;
+      padding: 4px 12px; border-radius: 99px;
+      background: var(--primary-lt); color: var(--accent);
+      flex-shrink: 0; margin-top: 3px;
+    }
+
+    /* ─── Section separator ──────────────────────── */
+    .sep { display: flex; align-items: center; gap: 10px; margin: 2px 0 14px; }
+    .sep-label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); white-space: nowrap; }
+    .sep-line  { flex: 1; height: 1px; background: var(--border); }
+
+    /* ─── Misc ───────────────────────────────────── */
+    .empty { font-size: .83rem; color: var(--text-3); text-align: center; padding: 20px; }
+    .spin  { display: inline-block; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .row   { display: flex; gap: 12px; }
+    .col   { flex: 1; }
+    .mt8   { margin-top: 8px; }
+    .mt12  { margin-top: 12px; }
+    .mt16  { margin-top: 16px; }
+
+    /* ─── Data viewer modal ──────────────────────── */
+    .modal-xl {
+      width: 92vw; max-width: 1200px;
+      max-height: 88vh; display: flex; flex-direction: column;
+    }
+    .modal-xl .modal-body { flex: 1; overflow: hidden; padding: 0; display: flex; flex-direction: column; }
+    .viewer-meta {
+      padding: 10px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+      font-size: .8rem; color: var(--text-3); background: var(--surface-2);
+    }
+    .viewer-meta strong { color: var(--text); }
+    .viewer-scroll { overflow: auto; flex: 1; }
+    .data-table {
+      width: 100%; border-collapse: collapse; font-size: .78rem;
+      white-space: nowrap;
+    }
+    .data-table th {
+      position: sticky; top: 0; background: var(--surface-2);
+      padding: 8px 12px; text-align: left; font-weight: 700;
+      font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
+      color: var(--text-2); border-bottom: 2px solid var(--border);
+      z-index: 1;
+    }
+    .data-table td {
+      padding: 6px 12px; border-bottom: 1px solid var(--border);
+      color: var(--text); max-width: 240px;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .data-table tr:hover td { background: var(--primary-lt); }
+    .data-table td.null { color: var(--text-3); font-style: italic; }
+    .viewer-loading { padding: 40px; text-align: center; color: var(--text-3); font-size: .85rem; }
+
+    @media (max-width: 700px) { .sidebar { display: none; } }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <span class="hdr-logo">ASFINT</span>
+  <span class="hdr-sep">·</span>
+  <span class="hdr-sub">Data Platform</span>
+  <span class="hdr-pill">LOCAL</span>
+  <div class="hdr-right">
+    <div class="hdr-dot" id="conn-dot"></div>
+    <span class="hdr-conn" id="conn-lbl">Connecting…</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-top">
+      <button class="btn btn-accent btn-full" onclick="openNewDs()">+ New Dataset</button>
+    </div>
+    <div class="sb-list">
+      <div class="sb-label">Datasets</div>
+      <div id="sb-ds"><div class="sb-empty">Loading…</div></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+
+    <!-- Welcome -->
+    <div class="welcome" id="view-welcome">
+      <div class="welcome-icon">📊</div>
+      <div class="welcome-title">Select a dataset to get started</div>
+      <div class="welcome-sub">Or create a new one with the button in the sidebar.</div>
+    </div>
+
+    <!-- Dataset view -->
+    <div id="view-dataset" style="display:none">
+
+      <!-- Dataset header -->
+      <div class="ds-hdr">
+        <div class="ds-hdr-left">
+          <div class="ds-name" id="dv-name"></div>
+          <div class="ds-desc" id="dv-desc"></div>
+        </div>
+        <span class="ds-type-pill" id="dv-type"></span>
+        <button class="btn btn-ghost btn-sm" onclick="openEditModal()">Edit</button>
+      </div>
+
+      <!-- Upload card -->
+      <div class="card" id="upload-card">
+        <div class="card-hdr">
+          <span class="card-title">Upload</span>
+        </div>
+        <div class="tabs" id="upload-tabs">
+          <div class="tab active" onclick="switchTab('standard')" id="tab-std-btn">Standard</div>
+          <div class="tab" onclick="switchTab('reconcile')" id="tab-rec-btn" style="display:none">Reconcile</div>
+        </div>
+
+        <!-- Standard tab -->
+        <div id="tab-standard">
+          <div class="card-body">
+            <div class="drop" id="drop-std" onclick="document.getElementById('fi-std').click()">
+              <input type="file" id="fi-std" accept=".csv" />
+              <div class="drop-icon">📂</div>
+              <div class="drop-txt">Drop a CSV here or click to browse</div>
+              <div class="drop-file" id="fi-std-name"></div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-primary" id="btn-upload" onclick="doUpload()">Upload File</button>
+          </div>
+        </div>
+
+        <!-- Reconcile tab -->
+        <div id="tab-reconcile" style="display:none">
+          <div class="card-body">
+            <div style="background:var(--primary-lt);border-radius:6px;padding:10px 14px;font-size:.8rem;color:var(--text-2);margin-bottom:16px;line-height:1.5;">
+              Select a <strong>clean_ready</strong> FR ingestion and a <strong>clean_ready</strong> Agenda ingestion.
+              The reconcile processor will merge them, with Agenda values taking precedence on conflicts.
+            </div>
+            <div class="frow">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+                <label class="flabel" style="margin:0">FR Source</label>
+                <button class="btn btn-ghost btn-sm" onclick="loadReadyIngestions()">Refresh</button>
+              </div>
+              <select class="fselect" id="rec-fr-id">
+                <option value="">Loading…</option>
+              </select>
+            </div>
+            <div class="frow">
+              <label class="flabel">Agenda Source</label>
+              <select class="fselect" id="rec-ag-id">
+                <option value="">Loading…</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-primary" id="btn-reconcile" onclick="doReconcile()">Start Reconcile</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ingestions list -->
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-title">Ingestions</span>
+          <button class="btn btn-ghost btn-sm" onclick="loadIngestions()">Refresh</button>
+        </div>
+        <div class="card-body" style="padding:12px;">
+          <div id="ing-list"><div class="empty">No ingestions yet.</div></div>
+        </div>
+      </div>
+
+      <!-- Ingestion detail -->
+      <div id="ing-detail" style="display:none">
+        <div class="sep"><div class="sep-label">Ingestion Detail</div><div class="sep-line"></div></div>
+
+        <!-- Pipeline stepper -->
+        <div class="card">
+          <div class="pipeline" id="pipeline"></div>
+        </div>
+
+        <!-- Overview -->
+        <div class="card mt8">
+          <div class="card-hdr">
+            <span class="card-title">Overview</span>
+            <span id="id-badge"></span>
+          </div>
+          <div class="card-body">
+            <div class="meta-grid" id="id-meta"></div>
+            <div class="err-banner" id="id-err"></div>
+          </div>
+          <div class="card-footer">
+            <a id="btn-download" class="btn btn-ghost btn-sm" style="display:none" download>Download Original</a>
+          </div>
+        </div>
+
+        <!-- Validation results -->
+        <div class="card mt8">
+          <div class="card-hdr">
+            <span class="card-title">Validation Checks</span>
+            <button class="btn btn-ghost btn-sm" onclick="loadValidation(S.selectedIng)">Refresh</button>
+          </div>
+          <div class="card-body">
+            <div id="val-list"><div class="empty">Validation not yet run.</div></div>
+          </div>
+        </div>
+
+        <!-- Publish -->
+        <div class="card mt8" id="publish-card">
+          <div class="card-hdr"><span class="card-title">Publish</span></div>
+          <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="font-size:.85rem;color:var(--text-2);">
+              Publish to make this ingestion available as a versioned warehouse table.
+            </div>
+            <button class="btn btn-success" id="btn-publish" onclick="doPublish()" disabled>Publish</button>
+          </div>
+        </div>
+
+        <!-- Version history -->
+        <div class="card mt8">
+          <div class="card-hdr">
+            <span class="card-title">Published Versions</span>
+            <button class="btn btn-ghost btn-sm" onclick="loadVersions()">Refresh</button>
+          </div>
+          <div class="card-body" style="padding:12px;">
+            <div id="ver-list"><div class="empty">No published versions yet.</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /view-dataset -->
+  </main>
+</div>
+
+<!-- MODAL: New dataset -->
+<div class="overlay" id="m-new">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title">New Dataset</span>
+      <button class="modal-close" onclick="closeModal('m-new')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="frow">
+        <label class="flabel">Name <span style="color:#ef4444">*</span></label>
+        <input class="finput" id="m-name" placeholder="e.g. q3-fr-2025" autocomplete="off" />
+      </div>
+      <div class="frow">
+        <label class="flabel">Process Type <span style="color:#ef4444">*</span></label>
+        <select class="fselect" id="m-type"><option value="">Loading…</option></select>
+      </div>
+      <div class="frow">
+        <label class="flabel">Description <span class="flabel-hint">optional</span></label>
+        <textarea class="ftextarea" id="m-desc" placeholder="Brief description…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('m-new')">Cancel</button>
+      <button class="btn btn-accent" id="btn-create" onclick="doCreate()">Create Dataset</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Edit dataset -->
+<div class="overlay" id="m-edit">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title">Edit Dataset</span>
+      <button class="modal-close" onclick="closeModal('m-edit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="frow">
+        <label class="flabel">Description</label>
+        <textarea class="ftextarea" id="e-desc"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('m-edit')">Cancel</button>
+      <button class="btn btn-accent" onclick="doEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Data viewer -->
+<div class="overlay" id="m-view">
+  <div class="modal modal-xl">
+    <div class="modal-hdr">
+      <span class="modal-title" id="viewer-title">Data Preview</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <a class="btn btn-ghost btn-sm" id="viewer-dl-link" download>⬇ CSV</a>
+        <button class="modal-close" onclick="closeModal('m-view')">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="viewer-meta" id="viewer-meta"></div>
+      <div class="viewer-scroll">
+        <div id="viewer-content" class="viewer-loading">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST AREA -->
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────
+const S = {
+  processTypes: [],
+  datasets: [],
+  selectedDs: null,
+  ingestions: [],
+  selectedIng: null,
+  pollTimer: null,
+  activeTab: 'standard',
+};
+
+// ─── API ──────────────────────────────────────────────────────
+async function req(method, path, body = null, isForm = false) {
+  const opts = { method, headers: {} };
+  if (body && !isForm) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  else if (body && isForm) { opts.body = body; }
+  const res = await fetch(path, opts);
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  if (!res.ok) throw new Error(typeof data === 'object' ? (data.detail || JSON.stringify(data)) : data);
+  return data;
+}
+
+// ─── Boot ─────────────────────────────────────────────────────
+async function boot() {
+  // Health check
+  try {
+    await req('GET', '/readyz');
+    document.getElementById('conn-dot').style.background = '#4ade80';
+    document.getElementById('conn-lbl').textContent = 'Connected';
+  } catch {
+    document.getElementById('conn-dot').style.background = '#f87171';
+    document.getElementById('conn-lbl').textContent = 'DB unreachable';
+  }
+  await Promise.all([loadProcessTypes(), loadDatasets()]);
+}
+
+// ─── Process types ────────────────────────────────────────────
+async function loadProcessTypes() {
+  try {
+    const d = await req('GET', '/api/v1/process-types');
+    S.processTypes = d.process_types || [];
+    renderTypeSelect();
+  } catch { S.processTypes = []; }
+}
+
+function renderTypeSelect() {
+  const opts = '<option value="">Select type…</option>' +
+    S.processTypes.map(t => `<option value="${t}">${t}</option>`).join('');
+  document.getElementById('m-type').innerHTML = opts;
+}
+
+// ─── Datasets ─────────────────────────────────────────────────
+async function loadDatasets() {
+  try {
+    S.datasets = await req('GET', '/api/v1/datasets');
+    renderSidebar();
+    if (S.selectedDs) {
+      const fresh = S.datasets.find(d => d.id === S.selectedDs.id);
+      if (fresh) { S.selectedDs = fresh; renderDsView(); }
+    }
+  } catch {
+    document.getElementById('sb-ds').innerHTML = '<div class="sb-empty">Failed to load.</div>';
+  }
+}
+
+function renderSidebar() {
+  const el = document.getElementById('sb-ds');
+  if (!S.datasets.length) { el.innerHTML = '<div class="sb-empty">No datasets yet.</div>'; return; }
+  el.innerHTML = S.datasets.map(ds => `
+    <div class="ds-item ${S.selectedDs?.id === ds.id ? 'active' : ''}" onclick="selectDs(${ds.id})">
+      <div class="ds-item-name">${esc(ds.name)}</div>
+      <div class="ds-item-row">
+        <span class="type-pill">${esc(ds.process_type)}</span>
+        <span class="ds-item-date">${fmtDateShort(ds.created_at)}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectDs(id) {
+  S.selectedDs = S.datasets.find(d => d.id === id) || null;
+  S.selectedIng = null;
+  S.ingestions = [];
+  stopPoll();
+  renderSidebar();
+  renderDsView();
+  await Promise.all([loadIngestions(), loadVersions()]);
+}
+
+function renderDsView() {
+  const ds = S.selectedDs;
+  document.getElementById('view-welcome').style.display = 'none';
+  document.getElementById('view-dataset').style.display = '';
+  document.getElementById('dv-name').textContent = ds.name;
+  document.getElementById('dv-desc').textContent = ds.description || '';
+  document.getElementById('dv-type').textContent = ds.process_type;
+
+  const isRec = ds.process_type === 'RECONCILE';
+  document.getElementById('tab-rec-btn').style.display = isRec ? '' : 'none';
+  if (!isRec && S.activeTab === 'reconcile') switchTab('standard');
+
+  document.getElementById('ing-detail').style.display = 'none';
+}
+
+// ─── New dataset ───────────────────────────────────────────────
+function openNewDs() {
+  document.getElementById('m-name').value = '';
+  document.getElementById('m-desc').value = '';
+  renderTypeSelect();
+  openModal('m-new');
+  setTimeout(() => document.getElementById('m-name').focus(), 80);
+}
+
+async function doCreate() {
+  const name = document.getElementById('m-name').value.trim();
+  const type = document.getElementById('m-type').value;
+  const desc = document.getElementById('m-desc').value.trim();
+  if (!name) { toast('error', 'Name is required.'); return; }
+  if (!type) { toast('error', 'Select a process type.'); return; }
+  const btn = document.getElementById('btn-create');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    const ds = await req('POST', '/api/v1/datasets', { name, process_type: type, description: desc || null });
+    closeModal('m-new');
+    toast('success', `Dataset "${ds.name}" created.`);
+    await loadDatasets();
+    selectDs(ds.id);
+  } catch (e) { toast('error', e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Create Dataset'; }
+}
+
+// ─── Edit dataset ──────────────────────────────────────────────
+function openEditModal() {
+  if (!S.selectedDs) return;
+  document.getElementById('e-desc').value = S.selectedDs.description || '';
+  openModal('m-edit');
+}
+
+async function doEdit() {
+  const desc = document.getElementById('e-desc').value.trim();
+  try {
+    const updated = await req('PATCH', `/api/v1/datasets/${S.selectedDs.id}`, { description: desc || null });
+    S.selectedDs = updated;
+    closeModal('m-edit');
+    toast('success', 'Dataset updated.');
+    renderDsView();
+    await loadDatasets();
+  } catch (e) { toast('error', e.message); }
+}
+
+// ─── Upload tabs ───────────────────────────────────────────────
+function switchTab(tab) {
+  S.activeTab = tab;
+  document.getElementById('tab-standard').style.display  = tab === 'standard'  ? '' : 'none';
+  document.getElementById('tab-reconcile').style.display = tab === 'reconcile' ? '' : 'none';
+  document.getElementById('tab-std-btn').classList.toggle('active', tab === 'standard');
+  document.getElementById('tab-rec-btn').classList.toggle('active', tab === 'reconcile');
+  if (tab === 'reconcile') loadReadyIngestions();
+}
+
+// ─── File inputs ───────────────────────────────────────────────
+function wire(dropId, inputId, nameId) {
+  const inp = document.getElementById(inputId);
+  const nm  = document.getElementById(nameId);
+  inp.addEventListener('change', () => { nm.textContent = inp.files[0]?.name || ''; });
+  const drop = document.getElementById(dropId);
+  if (!drop) return;
+  drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', ()  => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('over');
+    if (e.dataTransfer.files[0]) { inp.files = e.dataTransfer.files; nm.textContent = e.dataTransfer.files[0].name; }
+  });
+}
+
+// ─── Standard upload ───────────────────────────────────────────
+async function doUpload() {
+  const file = document.getElementById('fi-std').files[0];
+  if (!file) { toast('error', 'Choose a file first.'); return; }
+  const btn = document.getElementById('btn-upload');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  try {
+    const form = new FormData(); form.append('file', file);
+    const ing = await req('POST', `/api/v1/datasets/${S.selectedDs.id}/ingestions`, form, true);
+    toast('success', `Ingestion #${ing.id} started — validating…`);
+    document.getElementById('fi-std').value = '';
+    document.getElementById('fi-std-name').textContent = '';
+    await loadIngestions();
+    selectIng(ing.id);
+    startPoll();
+  } catch (e) { toast('error', e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Upload File'; }
+}
+
+// ─── Reconcile ────────────────────────────────────────────────
+async function loadReadyIngestions() {
+  const frSel = document.getElementById('rec-fr-id');
+  const agSel = document.getElementById('rec-ag-id');
+  frSel.innerHTML = '<option value="">Loading…</option>';
+  agSel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const [frReady, agReady] = await Promise.all([
+      req('GET', '/api/v1/ingestions/ready?process_type=FR'),
+      req('GET', '/api/v1/ingestions/ready?process_type=CONTINGENCY'),
+    ]);
+    const fmt = i =>
+      `<option value="${i.id}">#${i.id} — ${esc(i.dataset_name)} / ${esc(i.original_filename)}` +
+      `${i.row_count_clean != null ? ` (${i.row_count_clean.toLocaleString()} rows)` : ''}` +
+      ` · ${fmtDate(i.completed_at)}</option>`;
+    frSel.innerHTML = frReady.length
+      ? '<option value="">Select FR ingestion…</option>' + frReady.map(fmt).join('')
+      : '<option value="">No clean_ready FR ingestions yet</option>';
+    agSel.innerHTML = agReady.length
+      ? '<option value="">Select Agenda ingestion…</option>' + agReady.map(fmt).join('')
+      : '<option value="">No clean_ready Agenda ingestions yet</option>';
+  } catch (e) {
+    frSel.innerHTML = '<option value="">Failed to load</option>';
+    agSel.innerHTML = '<option value="">Failed to load</option>';
+    toast('error', 'Could not load ready ingestions: ' + e.message);
+  }
+}
+
+async function doReconcile() {
+  const frId = parseInt(document.getElementById('rec-fr-id').value);
+  const agId = parseInt(document.getElementById('rec-ag-id').value);
+  if (!frId) { toast('error', 'Select an FR ingestion.'); return; }
+  if (!agId) { toast('error', 'Select an Agenda ingestion.'); return; }
+  const btn = document.getElementById('btn-reconcile');
+  btn.disabled = true; btn.textContent = 'Starting…';
+  try {
+    const ing = await req('POST', `/api/v1/datasets/${S.selectedDs.id}/reconcile`, {
+      fr_ingestion_id: frId,
+      agenda_ingestion_id: agId,
+    });
+    toast('success', `Reconcile ingestion #${ing.id} started…`);
+    await loadIngestions();
+    selectIng(ing.id);
+    startPoll();
+  } catch (e) { toast('error', e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Start Reconcile'; }
+}
+
+// ─── Ingestions ────────────────────────────────────────────────
+async function loadIngestions() {
+  if (!S.selectedDs) return;
+  try {
+    const d = await req('GET', `/api/v1/datasets/${S.selectedDs.id}/ingestions?page_size=50`);
+    S.ingestions = d.items || [];
+    renderIngestions();
+    if (S.selectedIng) {
+      const cur = S.ingestions.find(i => i.id === S.selectedIng);
+      if (cur) { updateIngDetail(cur); }
+      if (cur && isActive(cur.status)) startPoll();
+      else { stopPoll(); if (cur) await loadValidation(cur.id); }
+    }
+  } catch { document.getElementById('ing-list').innerHTML = '<div class="empty">Could not load.</div>'; }
+}
+
+function isActive(s) { return ['pending','processing','validating'].includes(s); }
+
+function renderIngestions() {
+  const el = document.getElementById('ing-list');
+  if (!S.ingestions.length) { el.innerHTML = '<div class="empty">No ingestions yet. Upload a file above.</div>'; return; }
+  el.innerHTML = S.ingestions.map(ing => `
+    <div class="ing-row ${ing.id === S.selectedIng ? 'active' : ''}" onclick="selectIng(${ing.id})">
+      <div class="ing-left">
+        <div class="ing-name">${esc(ing.original_filename)}</div>
+        <div class="ing-meta">
+          <span>#${ing.id}</span>
+          ${ing.file_size_bytes != null ? `<span>${fmtBytes(ing.file_size_bytes)}</span>` : ''}
+          ${ing.row_count_raw != null ? `<span>${ing.row_count_raw.toLocaleString()} raw rows</span>` : ''}
+          ${ing.row_count_clean != null ? `<span>${ing.row_count_clean.toLocaleString()} clean rows</span>` : ''}
+          <span>${fmtDate(ing.created_at)}</span>
+        </div>
+      </div>
+      <span class="badge ${bCls(ing.status)}">${ing.status.replace(/_/g,' ')}</span>
+    </div>
+  `).join('');
+}
+
+async function selectIng(id) {
+  S.selectedIng = id;
+  renderIngestions();
+  const ing = S.ingestions.find(i => i.id === id);
+  if (!ing) return;
+  document.getElementById('ing-detail').style.display = '';
+  updateIngDetail(ing);
+  await loadValidation(id);
+  if (isActive(ing.status)) startPoll();
+  // scroll to detail
+  document.getElementById('ing-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function updateIngDetail(ing) {
+  // Badge
+  document.getElementById('id-badge').innerHTML = `<span class="badge ${bCls(ing.status)}">${ing.status.replace(/_/g,' ')}</span>`;
+
+  // Pipeline stepper
+  renderPipeline(ing.status);
+
+  // Meta grid
+  document.getElementById('id-meta').innerHTML = `
+    <div><div class="meta-item-lbl">File</div><div class="meta-item-val">${esc(ing.original_filename)}</div></div>
+    <div><div class="meta-item-lbl">Size</div><div class="meta-item-val">${ing.file_size_bytes != null ? fmtBytes(ing.file_size_bytes) : '—'}</div></div>
+    ${ing.row_count_raw  != null ? `<div><div class="meta-item-lbl">Raw Rows</div><div class="meta-item-val">${ing.row_count_raw.toLocaleString()}</div></div>` : ''}
+    ${ing.row_count_clean != null ? `<div><div class="meta-item-lbl">Clean Rows</div><div class="meta-item-val">${ing.row_count_clean.toLocaleString()}</div></div>` : ''}
+    <div><div class="meta-item-lbl">SHA-256</div><div class="meta-item-val meta-mono">${ing.file_sha256 ? ing.file_sha256.slice(0,16)+'…' : '—'}</div></div>
+    <div><div class="meta-item-lbl">Created</div><div class="meta-item-val">${fmtDate(ing.created_at)}</div></div>
+    ${ing.completed_at ? `<div><div class="meta-item-lbl">Completed</div><div class="meta-item-val">${fmtDate(ing.completed_at)}</div></div>` : ''}
+  `;
+
+  // Error
+  const errEl = document.getElementById('id-err');
+  if (ing.error_message) { errEl.textContent = ing.error_message; errEl.style.display = 'block'; errEl.dataset.serverError = '1'; }
+  else { errEl.innerHTML = ''; errEl.style.display = 'none'; delete errEl.dataset.serverError; }
+
+  // Download button
+  const dlBtn = document.getElementById('btn-download');
+  if (ing.raw_path) {
+    dlBtn.href = `/api/v1/ingestions/${ing.id}/download`;
+    dlBtn.style.display = '';
+  } else {
+    dlBtn.style.display = 'none';
+  }
+
+  // Publish button
+  const canPublish = ing.status === 'clean_ready';
+  document.getElementById('btn-publish').disabled = !canPublish;
+  document.getElementById('publish-card').style.display = ing.status === 'published' ? 'none' : '';
+}
+
+const STEPS = ['pending','processing','validated','clean_ready','published'];
+const STEP_LABELS = { pending: 'Pending', processing: 'Processing', validated: 'Validated', clean_ready: 'Clean & Ready', published: 'Published' };
+const FAIL_STATES = ['failed','validation_failed'];
+
+function renderPipeline(status) {
+  const isFail = FAIL_STATES.includes(status);
+  const curIdx = STEPS.indexOf(status);
+  let html = '';
+  STEPS.forEach((s, i) => {
+    if (i > 0) html += `<span class="step-arrow">›</span>`;
+    let cls = '';
+    if (isFail && i === (curIdx === -1 ? 2 : curIdx)) cls = 'err';
+    else if (i < curIdx || (status === s)) cls = i < curIdx ? 'done' : 'cur';
+    else if (status === s) cls = 'cur';
+    if (i < curIdx) cls = 'done';
+    if (status === s) cls = isFail ? 'err' : 'cur';
+    html += `<span class="step ${cls}">${STEP_LABELS[s]}</span>`;
+  });
+  if (isFail) {
+    html = STEPS.map((s, i) => {
+      const arrow = i > 0 ? `<span class="step-arrow">›</span>` : '';
+      return arrow + `<span class="step">${STEP_LABELS[s]}</span>`;
+    }).join('');
+    html += `<span class="step-arrow">›</span><span class="step err">Failed</span>`;
+  }
+  document.getElementById('pipeline').innerHTML = html;
+}
+
+// ─── Validation ────────────────────────────────────────────────
+async function loadValidation(ingId) {
+  const el = document.getElementById('val-list');
+  if (!ingId) return;
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const results = await req('GET', `/api/v1/ingestions/${ingId}/validation`);
+    renderValidation(results);
+  } catch {
+    el.innerHTML = '<div class="empty">No validation results yet — the ingestion may still be processing.</div>';
+  }
+}
+
+function renderValidation(results) {
+  const el = document.getElementById('val-list');
+  if (!results.length) { el.innerHTML = '<div class="empty">No validation results yet.</div>'; return; }
+
+  // Show failed checks in the overview error banner (only if no server-side error_message is set)
+  const errEl = document.getElementById('id-err');
+  if (errEl && !errEl.dataset.serverError) {
+    const failed = results.filter(r => r.status.toLowerCase() === 'fail');
+    if (failed.length) {
+      errEl.innerHTML = `<strong>Validation failed — ${failed.length} check${failed.length > 1 ? 's' : ''} did not pass:</strong><ul style="margin:6px 0 0 16px;padding:0">${
+        failed.map(r => `<li><strong>${esc(r.check_name)}</strong>${r.message ? ' — ' + esc(r.message) : ''}</li>`).join('')
+      }</ul>`;
+      errEl.style.display = 'block';
+    } else {
+      errEl.innerHTML = '';
+      errEl.style.display = 'none';
+    }
+  }
+
+  el.innerHTML = `<div class="val-grid">${results.map(r => {
+    const s = r.status.toLowerCase();
+    const bClass = s === 'pass' ? 'b-pass' : s === 'fail' ? 'b-fail' : s === 'warn' ? 'b-warn' : 'b-skipped';
+    const detailStr = r.details ? JSON.stringify(r.details, null, 2) : '';
+    return `
+      <div class="val-card ${s}" onclick="toggleDetail(this)">
+        <div class="val-name">${esc(r.check_name)}</div>
+        <span class="badge ${bClass}">${r.status.toUpperCase()}</span>
+        ${r.message ? `<div class="val-msg">${esc(r.message)}</div>` : ''}
+        ${detailStr ? `<pre class="val-detail">${esc(detailStr)}</pre>` : ''}
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function toggleDetail(card) {
+  const d = card.querySelector('.val-detail');
+  if (d) d.style.display = d.style.display === 'block' ? 'none' : 'block';
+}
+
+// ─── Publish ───────────────────────────────────────────────────
+async function doPublish() {
+  if (!S.selectedIng) return;
+  const btn = document.getElementById('btn-publish');
+  btn.disabled = true; btn.textContent = 'Publishing…';
+  try {
+    const r = await req('POST', `/api/v1/ingestions/${S.selectedIng}/publish`);
+    toast('success', `Published v${r.version} — "${r.table_name}", ${r.row_count.toLocaleString()} rows.`);
+    await loadIngestions();
+    await loadVersions();
+  } catch (e) {
+    toast('error', e.message);
+    btn.disabled = false; btn.textContent = 'Publish';
+  }
+}
+
+// ─── Versions ─────────────────────────────────────────────────
+async function loadVersions() {
+  if (!S.selectedDs) return;
+  const el = document.getElementById('ver-list');
+  try {
+    const vers = await req('GET', `/api/v1/datasets/${S.selectedDs.id}/versions`);
+    if (!vers.length) { el.innerHTML = '<div class="empty">No published versions yet.</div>'; return; }
+    el.innerHTML = vers.map(v => `
+      <div class="ver-row">
+        <span class="ver-num">v${v.version_number}</span>
+        <span class="ver-table" title="${esc(v.table_name || '')}">${esc(v.table_name || '—')}</span>
+        <span class="ver-rows">${v.row_count != null ? v.row_count.toLocaleString()+' rows' : '—'}</span>
+        <span class="ver-date">${fmtDate(v.published_at)}</span>
+        ${v.is_latest ? `<span class="badge b-clean_ready">latest</span>` : ''}
+        <div class="ver-actions">
+          ${v.table_name ? `<button class="btn btn-ghost btn-sm" onclick="copyText('${esc(v.table_name)}',this)" title="Copy table name">Copy name</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="viewVersion(${v.id},'${esc(v.table_name||'v'+v.version_number)}',${v.row_count||0})">View</button>
+          <a class="btn btn-ghost btn-sm" href="/api/v1/versions/${v.id}/download" download title="Download as CSV">⬇ CSV</a>
+        </div>
+      </div>
+    `).join('');
+  } catch {
+    el.innerHTML = '<div class="empty">Could not load versions.</div>';
+  }
+}
+
+// ─── Polling ───────────────────────────────────────────────────
+function startPoll() {
+  stopPoll();
+  S.pollTimer = setInterval(async () => {
+    if (!S.selectedIng) { stopPoll(); return; }
+    try {
+      const ing = await req('GET', `/api/v1/ingestions/${S.selectedIng}`);
+      const idx = S.ingestions.findIndex(i => i.id === ing.id);
+      if (idx !== -1) S.ingestions[idx] = ing;
+      renderIngestions();
+      updateIngDetail(ing);
+      if (!isActive(ing.status)) {
+        stopPoll();
+        await loadValidation(ing.id);
+      }
+    } catch { stopPoll(); }
+  }, 2500);
+}
+
+function stopPoll() {
+  if (S.pollTimer) { clearInterval(S.pollTimer); S.pollTimer = null; }
+}
+
+// ─── Modals ───────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+});
+
+// ─── Toasts ───────────────────────────────────────────────────
+function toast(type, msg) {
+  const icons = { success: '✓', error: '✕', info: 'ℹ' };
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ'}</span><span class="toast-msg">${esc(msg)}</span>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────
+// ─── Data viewer ──────────────────────────────────────────────
+async function viewVersion(id, tableName, totalRows) {
+  document.getElementById('viewer-title').textContent = tableName;
+  document.getElementById('viewer-meta').innerHTML = '<span class="spin">↻</span> Loading…';
+  document.getElementById('viewer-content').className = 'viewer-loading';
+  document.getElementById('viewer-content').textContent = 'Loading…';
+  document.getElementById('viewer-dl-link').href = `/api/v1/versions/${id}/download`;
+  document.getElementById('viewer-dl-link').download = `${tableName}.csv`;
+  openModal('m-view');
+
+  try {
+    const d = await req('GET', `/api/v1/versions/${id}/data?limit=500`);
+    const meta = document.getElementById('viewer-meta');
+    const shown = d.rows.length;
+    const capped = totalRows > shown;
+    meta.innerHTML = `
+      <strong>${d.columns.length}</strong> columns ·
+      <strong>${shown.toLocaleString()}</strong> rows shown
+      ${capped ? `<span style="color:var(--warn)">(capped at ${shown} of ${totalRows.toLocaleString()} — download CSV for full data)</span>` : ''}
+    `;
+
+    if (!d.rows.length) {
+      document.getElementById('viewer-content').textContent = 'No rows.';
+      return;
+    }
+
+    const th = d.columns.map(c => `<th>${esc(c)}</th>`).join('');
+    const rows = d.rows.map(row =>
+      '<tr>' + d.columns.map(c => {
+        const v = row[c];
+        return v === null || v === undefined
+          ? '<td class="null">null</td>'
+          : `<td title="${esc(String(v))}">${esc(String(v))}</td>`;
+      }).join('') + '</tr>'
+    ).join('');
+
+    document.getElementById('viewer-content').className = '';
+    document.getElementById('viewer-content').innerHTML =
+      `<table class="data-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`;
+  } catch (e) {
+    document.getElementById('viewer-meta').textContent = '';
+    document.getElementById('viewer-content').textContent = `Error: ${e.message}`;
+  }
+}
+
+async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  } catch { toast('error', 'Could not copy to clipboard.'); }
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n/1024).toFixed(1)} KB`;
+  return `${(n/1048576).toFixed(1)} MB`;
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  return new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+function fmtDateShort(s) {
+  if (!s) return '';
+  return new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function bCls(s) {
+  const map = {
+    pending: 'b-pending', processing: 'b-processing', validating: 'b-validating',
+    validated: 'b-validated', clean_ready: 'b-clean_ready',
+    failed: 'b-failed', validation_failed: 'b-validation_failed',
+    published: 'b-published',
+  };
+  return map[s] || 'b-pending';
+}
+
+// ─── Wire up file drops ────────────────────────────────────────
+wire('drop-std', 'fi-std', 'fi-std-name');
+
+// Keyboard: Escape closes modals
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open'));
+});
+
+boot();
+</script>
+</body>
+</html>
