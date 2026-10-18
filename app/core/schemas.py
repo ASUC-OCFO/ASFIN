@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
@@ -49,6 +49,10 @@ class IngestionOut(BaseModel):
     file_ext: str
     raw_path: Optional[str]
     raw_path_secondary: Optional[str]
+    period_id: Optional[int]
+    source_role: Optional[str]
+    meeting_week: Optional[str]
+    meeting_date: Optional[date]
     file_size_bytes: Optional[int]
     file_sha256: Optional[str]
     row_count_raw: Optional[int]

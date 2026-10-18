@@ -2,12 +2,14 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     JSON,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.sql import func
 
@@ -25,6 +27,23 @@ class Dataset(Base):
     validation_cfg = Column(JSON, nullable=True)  # per-validator config overrides
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_deleted = Column(Boolean, default=False, server_default='false', nullable=False)
+
+
+class CollectionPeriod(Base):
+    """Admin-managed period that is allowed to receive source ingestions."""
+
+    __tablename__ = "collection_periods"
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "label", name="uq_collection_periods_dataset_label"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    label = Column(String, nullable=False)
+    starts_on = Column(Date, nullable=False)
+    ends_on = Column(Date, nullable=False)
+    accept_uploads = Column(Boolean, default=False, server_default='false', nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class DatasetUpload(Base):
@@ -55,6 +74,10 @@ class Ingestion(Base):
     raw_path = Column(String, nullable=True)
     raw_path_secondary = Column(String, nullable=True)
     clean_path = Column(String, nullable=True)
+    period_id = Column(Integer, ForeignKey("collection_periods.id"), nullable=True, index=True)
+    source_role = Column(String, nullable=True)
+    meeting_week = Column(String, nullable=True)
+    meeting_date = Column(Date, nullable=True, index=True)
     fr_ingestion_id = Column(Integer, ForeignKey("ingestions.id"), nullable=True)
     agenda_ingestion_id = Column(Integer, ForeignKey("ingestions.id"), nullable=True)
     file_size_bytes = Column(BigInteger, nullable=True)
