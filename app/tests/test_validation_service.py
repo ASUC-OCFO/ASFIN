@@ -175,6 +175,63 @@ def test_upload_submits_validation_job(client, db, tmp_path, monkeypatch):
     assert submitted_ids == [resp.json()["id"]]
 
 
+
+def test_ficomm_upload_does_not_submit_legacy_validation_job(client, db, tmp_path, monkeypatch):
+    """FiComm uploads wait for the run orchestration layer instead of legacy ETL."""
+    from datetime import date
+    from io import BytesIO
+
+    import pandas as pd
+
+    import app.api.routers.ingestions as ingestions_router
+    import app.services.storage as storage_module
+    from app.core.models import CollectionPeriod
+
+    monkeypatch.setattr(storage_module, "DATA_ROOT", tmp_path)
+
+    submitted_ids = []
+    monkeypatch.setattr(
+        ingestions_router, "job_submit",
+        lambda fn, *args, **kwargs: submitted_ids.append(args[0]),
+    )
+
+    dataset = Dataset(name="FICOMM", process_type="FICOMM")
+    db.add(dataset)
+    db.commit()
+    db.refresh(dataset)
+
+    db.add(CollectionPeriod(
+        dataset_id=dataset.id,
+        label="Fall 2026",
+        starts_on=date(2026, 8, 1),
+        ends_on=date(2026, 12, 31),
+        accept_uploads=True,
+    ))
+    db.commit()
+
+    raw = pd.DataFrame([
+        ["Senate Finance Resolution 2026/2027 10/12/2026", None, None, None, None, None],
+        ["Appx.", "Org Name", "Request Type", "Org Type (year)", "Amount Requested", "Funding Source"],
+        ["A", "Example Organization", "Contingency Funding", "SAG 1", 100, "ASUC"],
+    ])
+    buffer = BytesIO()
+    raw.to_excel(buffer, index=False, header=False)
+
+    resp = client.post(
+        f"/api/v1/datasets/{dataset.id}/ingestions",
+        files={
+            "file": (
+                "FR 26_27 F7.xlsx",
+                buffer.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["source_role"] == "FR"
+    assert submitted_ids == []
+
 def test_validation_routes_return_results(client, db, tmp_path):
     """GET /validation and /validation/{check} return per-check results seeded via the service."""
     raw_file = tmp_path / "bad.csv"

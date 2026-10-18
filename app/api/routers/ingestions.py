@@ -61,7 +61,9 @@ async def create_ingestion(
 ):
     """Upload a file to start a new ingestion pipeline run."""
     ingestion = await IngestionService(db).create(dataset_id, file)
-    job_submit(_validate_ingestion, ingestion.id)
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if dataset and dataset.process_type != "FICOMM":
+        job_submit(_validate_ingestion, ingestion.id)
     return ingestion
 
 
