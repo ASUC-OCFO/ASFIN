@@ -151,10 +151,10 @@ def test_upload_submits_validation_job(client, db, tmp_path, monkeypatch):
 
     monkeypatch.setattr(storage_module, "DATA_ROOT", tmp_path)
 
-    submitted_ids = []
+    submitted_jobs = []
     monkeypatch.setattr(
         ingestions_router, "job_submit",
-        lambda fn, *args, **kwargs: submitted_ids.append(args[0]),
+        lambda fn, *args, **kwargs: submitted_jobs.append((fn.__name__, args[0])),
     )
 
     dataset = Dataset(name="job_trigger_ds", process_type="FR")
@@ -172,12 +172,12 @@ def test_upload_submits_validation_job(client, db, tmp_path, monkeypatch):
         )
 
     assert resp.status_code == 201
-    assert submitted_ids == [resp.json()["id"]]
+    assert submitted_jobs == [("_validate_ingestion", resp.json()["id"])]
 
 
 
 def test_ficomm_upload_does_not_submit_legacy_validation_job(client, db, tmp_path, monkeypatch):
-    """FiComm uploads wait for the run orchestration layer instead of legacy ETL."""
+    """FiComm uploads submit the weekly run orchestrator instead of legacy ETL."""
     from datetime import date
     from io import BytesIO
 
@@ -189,10 +189,10 @@ def test_ficomm_upload_does_not_submit_legacy_validation_job(client, db, tmp_pat
 
     monkeypatch.setattr(storage_module, "DATA_ROOT", tmp_path)
 
-    submitted_ids = []
+    submitted_jobs = []
     monkeypatch.setattr(
         ingestions_router, "job_submit",
-        lambda fn, *args, **kwargs: submitted_ids.append(args[0]),
+        lambda fn, *args, **kwargs: submitted_jobs.append((fn.__name__, args[0])),
     )
 
     dataset = Dataset(name="FICOMM", process_type="FICOMM")
@@ -230,7 +230,7 @@ def test_ficomm_upload_does_not_submit_legacy_validation_job(client, db, tmp_pat
 
     assert resp.status_code == 201
     assert resp.json()["source_role"] == "FR"
-    assert submitted_ids == []
+    assert submitted_jobs == [("_process_ficomm_ingestion", resp.json()["id"])]
 
 def test_validation_routes_return_results(client, db, tmp_path):
     """GET /validation and /validation/{check} return per-check results seeded via the service."""

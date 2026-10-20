@@ -361,6 +361,19 @@ def _write_csv(df: pd.DataFrame, path: Path) -> None:
     output.to_csv(path, index=False)
 
 
+def contingency_from_merged(merged: pd.DataFrame) -> pd.DataFrame:
+    if merged.empty:
+        return merged.copy()
+
+    mask = pd.Series(False, index=merged.index)
+    for column in ("FR Request Type", "Agenda Request Type", "Request Type"):
+        if column in merged.columns:
+            mask |= merged[column].astype("string").str.contains(
+                r"\bcontingency\b", case=False, na=False
+            )
+    return merged.loc[mask].reset_index(drop=True)
+
+
 def _write_finance_committee_week(result: FinanceCommitteeWeekResult, output_root: Path) -> dict:
     date_iso = pd.Timestamp(result.meeting_date).strftime("%Y-%m-%d")
     prefix = f"{result.week}_{date_iso}"
@@ -372,9 +385,11 @@ def _write_finance_committee_week(result: FinanceCommitteeWeekResult, output_roo
     if result.agenda_source:
         shutil.copy2(result.agenda_source, week_dir / f"{prefix}_Agenda_input{result.agenda_source.suffix.lower()}")
 
+    contingency = contingency_from_merged(result.merged)
     _write_csv(result.fr, week_dir / f"{prefix}_FR_cleaned.csv")
     _write_csv(result.agenda, week_dir / f"{prefix}_Agenda_cleaned.csv")
     _write_csv(result.merged, week_dir / f"{prefix}_merged.csv")
+    _write_csv(contingency, week_dir / f"{prefix}_contingency.csv")
     _flags_dataframe(result.flags).to_csv(week_dir / f"{prefix}_review.csv", index=False)
 
     return {
@@ -386,6 +401,7 @@ def _write_finance_committee_week(result: FinanceCommitteeWeekResult, output_roo
         "fr_rows": len(result.fr),
         "agenda_rows": len(result.agenda),
         "merged_rows": len(result.merged),
+        "contingency_rows": len(contingency),
         "warnings": sum(flag.severity == "warning" for flag in result.flags),
         "errors": sum(flag.severity == "error" for flag in result.flags),
     }
