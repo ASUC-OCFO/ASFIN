@@ -45,6 +45,16 @@ class StorageService:
         """Temporary staging area for a single pipeline run: /data/staging/{ingestion_id}/"""
         return DATA_ROOT / "staging" / str(ingestion_id)
 
+    @staticmethod
+    def run_dir(dataset_id: int, run_id: int) -> Path:
+        return DATA_ROOT / "processed" / str(dataset_id) / str(run_id)
+
+    @classmethod
+    def ensure_run_dir(cls, dataset_id: int, run_id: int) -> Path:
+        path = cls.run_dir(dataset_id, run_id)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
 
 # ---------------------------------------------------------------------------
 # Legacy helpers — kept for the dataset-upload feature (Week 2)

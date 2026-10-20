@@ -90,6 +90,54 @@ class Ingestion(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class ProcessingRun(Base):
+    __tablename__ = "processing_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    period_id = Column(Integer, ForeignKey("collection_periods.id"), nullable=True, index=True)
+    parent_run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=True, index=True)
+    run_type = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending", server_default="pending", index=True)
+    label = Column(String, nullable=True)
+    meeting_week = Column(String, nullable=True)
+    meeting_date = Column(Date, nullable=True, index=True)
+    triggered_by = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
+class RunInput(Base):
+    __tablename__ = "run_inputs"
+    __table_args__ = (
+        UniqueConstraint("run_id", "ingestion_id", name="uq_run_inputs_run_ingestion"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=False, index=True)
+    ingestion_id = Column(Integer, ForeignKey("ingestions.id"), nullable=False, index=True)
+    input_role = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class RunArtifact(Base):
+    __tablename__ = "run_artifacts"
+    __table_args__ = (
+        UniqueConstraint("run_id", "artifact_type", name="uq_run_artifacts_run_type"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=False, index=True)
+    artifact_type = Column(String, nullable=False)
+    storage_path = Column(String, nullable=False)
+    file_format = Column(String, nullable=True)
+    row_count = Column(Integer, nullable=True)
+    file_sha256 = Column(String(64), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class ValidationResult(Base):
     __tablename__ = "validation_results"
 
