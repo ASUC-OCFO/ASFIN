@@ -44,7 +44,7 @@ class FakeUploadFile:
 
 def run(coro):
     """Run a coroutine from synchronous test code."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------

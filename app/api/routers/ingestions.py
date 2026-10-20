@@ -57,7 +57,7 @@ def _validate_ingestion(ingestion_id: int) -> None:
             if ingestion and ingestion.status == "validated":
                 ETLService(db).run(ingestion_id)
     except Exception:
-        pass
+        logger.exception("Validation/ETL failed for ingestion %s", ingestion_id)
     finally:
         db.close()
 
@@ -105,7 +105,7 @@ def create_reconcile_ingestion(
 
 @router.get("/api/v1/ingestions/ready", response_model=List[ReadyIngestionOut])
 def list_ready_ingestions(
-    process_type: Optional[str] = Query(None, description="Filter by process type, e.g. FR or CONTINGENCY"),
+    process_type: Optional[str] = Query(None, description="Filter by legacy process type"),
     db: Session = Depends(get_db),
 ):
     """Return all clean_ready ingestions, optionally filtered by process type."""

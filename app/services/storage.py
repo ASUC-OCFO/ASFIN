@@ -57,7 +57,7 @@ class StorageService:
 
 
 # ---------------------------------------------------------------------------
-# Legacy helpers — kept for the dataset-upload feature (Week 2)
+# Compatibility helpers for the direct dataset-upload routes
 # ---------------------------------------------------------------------------
 
 

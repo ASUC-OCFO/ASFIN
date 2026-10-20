@@ -47,7 +47,7 @@ class CollectionPeriod(Base):
 
 
 class DatasetUpload(Base):
-    """Stores files attached directly to a dataset (Week 2 upload feature)."""
+    """Stores files attached through the legacy direct dataset-upload route."""
 
     __tablename__ = "dataset_uploads"
 
