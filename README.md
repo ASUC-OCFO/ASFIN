@@ -1,160 +1,241 @@
 # ASFIN
 
-ASFIN contains data processing tools used by the ASUC Office of the Chief Financial Officer (OCFO) to clean, standardize, and reconcile financial and organizational data.
+ASFIN is the ASUC Office of the Chief Financial Officer (OCFO) data-processing platform. It combines the existing `ASFINT` transformation code with a local FastAPI/PostgreSQL service for durable source storage, processing metadata, and Finance Committee (FiComm) workflow orchestration.
 
-The repository supports two main local workflows:
+The canonical datasets are:
 
-- A general processor interface through `execute.py`
-- A Finance Committee FR/Agenda batch workflow through `run_ficomm.py`
+- `FICOMM` — Finance Committee Financial Request (FR) and Agenda/Minutes processing
+- `ABSA` — ABSA processing
 
-Processing logic is organized under `ASFINT/`, with dataset-specific transformations in `ASFINT/Transform/` and shared workflow logic in `ASFINT/Pipeline/`.
+Legacy processor entry points remain in the repository for compatibility, but new FiComm work should use the ingestion and processing-run workflow described below.
 
-## Setup
+## Architecture
 
-From the repository root, create and activate a Python environment, then install the project dependencies:
+The local service uses PostgreSQL for metadata and a persistent data volume for source files and processed artifacts.
+
+```text
+Upload
+  -> immutable raw file
+  -> ingestion metadata
+  -> FiComm preflight / period check
+  -> weekly ProcessingRun
+  -> RunArtifact records + processed CSVs
+
+Bulk FiComm run
+  -> parent ProcessingRun
+  -> weekly child ProcessingRuns
+  -> parent manifest / review outputs
+```
+
+Important storage paths are:
+
+```text
+/data/raw/{dataset_id}/{ingestion_id}/original.{ext}
+/data/processed/{dataset_id}/{run_id}/...
+```
+
+PostgreSQL records datasets, collection periods, ingestions, processing runs, run inputs, artifacts, validation results, and legacy publish metadata. Processed FiComm rows are currently stored as durable CSV artifacts; they are not yet loaded into queryable PostgreSQL tables.
+
+## Development Setup
+
+Create a Python environment for local tests and processor development:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-
-pip install -r requirements.txt
-pip install -e .
-```
-
-Python 3.12 is recommended for local development.
-
-For API development and the full test suite, install the development dependencies instead:
-
-```bash
 pip install -r requirements.dev.txt
 pip install -e .
 ```
 
-`requirements.dev.txt` includes both the core processing dependencies and the API dependencies.
-
-## General Processing
-
-`execute.py` is the generic command-line entry point for processors configured in ASFIN.
-
-A typical command looks like:
+Create the local Docker environment file from the tracked template and replace the example password:
 
 ```bash
-python execute.py   --input files/input   --output files/output   --process fr
+cp .env.example .env
 ```
 
-The arguments are:
-
-- `--input`, `-i`: input file or directory to process
-- `--output`, `-o`: directory where processed files should be written
-- `--process`, `-p`: processor type, such as `fr`, `absa`, or `agenda`
-- `--reporting`, `-r`: optional flag that enables processor reporting output
-
-For example, to process files in `files/input` with the ABSA processor and write results to `files/output`:
+Start PostgreSQL and the API:
 
 ```bash
-python execute.py   --input files/input   --output files/output   --process absa
+docker compose up -d --build
 ```
 
-The generic workflow is implemented in `ASFINT/Pipeline/workflow.py`. It loads the source files, routes them to the selected processor, and writes the resulting output.
-
-## FiComm FR/Agenda Processing
-
-`run_ficomm.py` processes a full academic year of Finance Committee Financial Request (FR) spreadsheets together with the corresponding Agenda/Minutes documents.
-
-The command requires three directories:
+Apply database migrations and create the canonical dataset rows:
 
 ```bash
-python run_ficomm.py   --agendas /path/to/agenda-directory   --frs /path/to/fr-directory   --output /path/to/output-directory
+docker compose exec -T api alembic upgrade head
+docker compose exec -T api python -m app.admin.datasets bootstrap
 ```
 
-For example, with an academic-year folder structured as:
+The API binds to `127.0.0.1:8000`; PostgreSQL binds to `127.0.0.1:5432`. The database and data files are stored in the `asfint_postgres` and `asfint_data` Docker volumes.
+
+To stop the services without deleting stored data:
+
+```bash
+docker compose stop
+```
+
+Do not use `docker compose down -v` unless the Docker volumes and all development data are intentionally being deleted.
+
+## Collection Periods
+
+FiComm uploads are accepted only when their inferred meeting date belongs to an admin-managed collection period that is open for uploads. Periods are intended to represent semester-level ranges such as Fall or Spring.
+
+List periods:
+
+```bash
+docker compose exec -T api python -m app.admin.periods list
+```
+
+Create an open period:
+
+```bash
+docker compose exec -T api python -m app.admin.periods create \
+  --dataset-id 1 \
+  --label "Fall 2026" \
+  --start 2026-08-01 \
+  --end 2026-12-31 \
+  --open
+```
+
+Open or close an existing period:
+
+```bash
+docker compose exec -T api python -m app.admin.periods open 1
+docker compose exec -T api python -m app.admin.periods close 1
+```
+
+Period administration intentionally has no HTTP write API. These commands should be run by an administrator in the same application environment used for storage.
+
+## FiComm Ingestion and Weekly Processing
+
+FiComm source files are uploaded through:
 
 ```text
-example-year/
-  agendas/
-    Fall/
-    Spring/
-  resolutions/
-    Fall/
-    Spring/
+POST /api/v1/datasets/{dataset_id}/ingestions
 ```
 
-the pipeline can be run with:
+The upload preflight classifies supported sources as `FR` or `AGENDA`, extracts the meeting week/date, verifies that the date belongs to an open collection period, and rejects duplicates before creating durable raw storage.
+
+When both source roles for a meeting week are available, ASFIN creates a weekly processing run. A completed weekly run stores these artifacts:
+
+- `fr_cleaned.csv`
+- `agenda_cleaned.csv`
+- `merged.csv`
+- `contingency.csv`
+- `review_flags.csv`
+
+`contingency.csv` is derived from the merged output by retaining rows whose normalized request type is `Contingency`.
+
+## Bulk FiComm Processing
+
+Historical or semester-level processing reuses the weekly workflow and records a parent bulk run with weekly child runs.
+
+Process one collection period:
 
 ```bash
-python run_ficomm.py   --agendas example-year/agendas   --frs example-year/resolutions   --output example-year/processed
+docker compose exec -T api python -m app.admin.ficomm process-period 1
 ```
 
-The agenda and FR directories may contain semester subdirectories. The pipeline searches them recursively, identifies the meeting week and date for each source file, and pairs the corresponding FR and Agenda records.
+Process multiple periods in one bulk run:
 
-For each meeting week, the pipeline:
-
-- Cleans the FR spreadsheet and parses decisions from the Agenda/Minutes document.
-- Reconciles corresponding records while preserving values from both sources, including records that appear in only one source.
-- Records review flags for conditions that may require manual review, such as date discrepancies, ambiguous name matches, malformed source text, or missing inputs.
-- Copies the source inputs into the processed week directory and writes the cleaned and merged CSV outputs.
-
-A processed year is organized by meeting week and date. For example:
-
-```text
-processed/
-  F1_YYYY-MM-DD/
-    F1_YYYY-MM-DD_FR.xlsx
-    F1_YYYY-MM-DD_Agenda.docx
-    F1_YYYY-MM-DD_FR_cleaned.csv
-    F1_YYYY-MM-DD_Agenda_cleaned.csv
-    F1_YYYY-MM-DD_merged.csv
-  F2_YYYY-MM-DD/
-    ...
-  manifest.csv
-  review_flags.csv
-  review_summary.csv
+```bash
+docker compose exec -T api python -m app.admin.ficomm process-periods 1 2 --label "2026-27"
 ```
 
-`manifest.csv` summarizes each processed week, including source filenames, row counts, warnings, and errors. `review_flags.csv` contains individual items that may require manual review, while `review_summary.csv` summarizes those flags by type.
+List processing runs:
 
-The Finance Committee workflow is implemented primarily in:
+```bash
+docker compose exec -T api python -m app.admin.ficomm list-runs
+```
 
-- `ASFINT/Pipeline/workflow.py`
-- `ASFINT/Transform/FR_Processor.py`
-- `ASFINT/Transform/Agenda_Processor.py`
-- `ASFINT/Transform/Reconciliation_Processor.py`
-- `ASFINT/Utility/Matching.py`
+The parent bulk run stores:
 
-## API
+- `manifest.csv`
+- `review_flags.csv`
+- `review_summary.csv`
 
-The FastAPI application is defined in `app/api/main.py`. The API layer is separate from the local processing commands and uses the processing and storage components under `ASFINT/` and `app/`.
+A bulk run can process weeks with only an FR or only an Agenda and records those cases in the manifest/review outputs. Ambiguous duplicate source roles for the same period/week are rejected instead of being selected implicitly.
 
-For local API development, install `requirements.dev.txt`. The Docker configuration runs the application with `app.api.main:app`.
+File-processing admin commands should run in the same runtime as the stored raw files. With the Docker development setup, run them through `docker compose exec ... api` as shown above.
+
+## Standalone Processing Commands
+
+The original local processor interfaces remain available for compatibility and processor development.
+
+Run a configured processor with `execute.py`:
+
+```bash
+python execute.py --input files/input --output files/output --process absa
+```
+
+Run the directory-based FiComm year workflow with `run_ficomm.py`:
+
+```bash
+python run_ficomm.py \
+  --agendas /path/to/agenda-directory \
+  --frs /path/to/fr-directory \
+  --output /path/to/output-directory
+```
+
+The year workflow recursively discovers FiComm sources, pairs them by meeting week, and writes weekly outputs plus a year-level manifest and review files. The service-backed ingestion/run workflow should be preferred when durable source and run tracking are required.
+
+## Database Migrations
+
+Alembic is the source of truth for the service database schema. The API does not create tables automatically on startup.
+
+Apply migrations:
+
+```bash
+docker compose exec -T api alembic upgrade head
+```
+
+Check model/migration drift during development:
+
+```bash
+docker compose exec -T api alembic check
+```
 
 ## Tests
 
-Run the FiComm pipeline tests with:
+Run the full repository test suite with:
 
 ```bash
-python -m pytest tests/test_ficomm_pipeline.py -q
+pytest -q
 ```
 
-Run the full repository test suite, including the API tests under `app/tests/`, with:
+Run only the standalone FiComm pipeline tests with:
 
 ```bash
-python -m pytest -q
+pytest tests/test_ficomm_pipeline.py -q
 ```
+
+## Current Scope
+
+This branch establishes local persistent storage, Alembic-managed metadata, FiComm upload preflight, weekly processing, and bulk processing. Authentication/authorization, production deployment and backups, and the redesign that loads processed artifacts into queryable PostgreSQL tables are separate follow-up work.
+
+The current Docker setup binds services to localhost and should not be exposed directly to an untrusted network.
 
 ## Repository Structure
 
 ```text
 ASFINT/
-  Config/       Processor configuration
-  Pipeline/     Workflow orchestration
+  Config/       Legacy processor configuration
+  Pipeline/     Processing workflow orchestration
   Pull/         Input loading
   Push/         Output writing
   Transform/    Dataset-specific processors
   Utility/      Shared utilities
   Validation/   Validation helpers
 
-app/            API, services, storage, and API tests
-tests/          Processing pipeline tests
-execute.py      Generic processing CLI
-run_ficomm.py   FiComm FR/Agenda batch processing CLI
+app/
+  admin/        Backend administration commands
+  api/          FastAPI application and routes
+  core/         Database, models, schemas, and job runner
+  services/     Ingestion, storage, processing, and publishing services
+  tests/        Service/API tests
+
+alembic/        Database migrations
+tests/          Standalone processing tests
+execute.py      Generic processor CLI
+run_ficomm.py   Standalone FiComm batch CLI
 ```

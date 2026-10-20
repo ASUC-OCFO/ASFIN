@@ -1,15 +1,12 @@
-version: "3.9"
-
 services:
-
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
-      DATABASE_URL: postgresql://asfint:asfint@db:5432/asfint
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       DATA_ROOT: /data
     volumes:
       - asfint_data:/data
@@ -20,16 +17,19 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_USER: asfint
-      POSTGRES_PASSWORD: asfint
-      POSTGRES_DB: asfint
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - asfint_postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U asfint"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
   asfint_data:
+  asfint_postgres:

@@ -1,4 +1,3 @@
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -6,19 +5,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routers import datasets, ingestions, process_types, publish
-from app.core.database import check_connection, engine
-from app.core.models import Base
+from app.core.database import check_connection
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    yield
-
-
-app = FastAPI(title="ASFINT Data Platform", lifespan=lifespan)
+app = FastAPI(title="ASFINT Data Platform")
 
 app.include_router(datasets.router)
 app.include_router(ingestions.router)

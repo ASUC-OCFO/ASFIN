@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -16,12 +17,24 @@ from app.core.schemas import (
     ValidationResultOut,
 )
 from app.services.elt_service import ETLService
+from app.services.ficomm_run_service import FiCommRunService
 from app.services.ingestion_service import IngestionService
 from app.services.validation_service import ValidationService
 
 router = APIRouter(tags=["ingestions"])
+logger = logging.getLogger(__name__)
 
 job_submit = job_runner.submit
+
+
+def _process_ficomm_ingestion(ingestion_id: int) -> None:
+    db = SessionLocal()
+    try:
+        FiCommRunService(db).process_ready_week(ingestion_id)
+    except Exception:
+        logger.exception("FiComm processing failed for ingestion %s", ingestion_id)
+    finally:
+        db.close()
 
 
 def _validate_ingestion(ingestion_id: int) -> None:
@@ -44,7 +57,7 @@ def _validate_ingestion(ingestion_id: int) -> None:
             if ingestion and ingestion.status == "validated":
                 ETLService(db).run(ingestion_id)
     except Exception:
-        pass
+        logger.exception("Validation/ETL failed for ingestion %s", ingestion_id)
     finally:
         db.close()
 
@@ -61,7 +74,11 @@ async def create_ingestion(
 ):
     """Upload a file to start a new ingestion pipeline run."""
     ingestion = await IngestionService(db).create(dataset_id, file)
-    job_submit(_validate_ingestion, ingestion.id)
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if dataset and dataset.process_type == "FICOMM":
+        job_submit(_process_ficomm_ingestion, ingestion.id)
+    else:
+        job_submit(_validate_ingestion, ingestion.id)
     return ingestion
 
 
@@ -88,7 +105,7 @@ def create_reconcile_ingestion(
 
 @router.get("/api/v1/ingestions/ready", response_model=List[ReadyIngestionOut])
 def list_ready_ingestions(
-    process_type: Optional[str] = Query(None, description="Filter by process type, e.g. FR or CONTINGENCY"),
+    process_type: Optional[str] = Query(None, description="Filter by legacy process type"),
     db: Session = Depends(get_db),
 ):
     """Return all clean_ready ingestions, optionally filtered by process type."""

@@ -326,3 +326,41 @@ def test_csv_output_formats_money_columns_to_two_decimals(tmp_path):
     assert lines[2] == "110.50,12.35,96.551724"
     assert lines[3] == ",1000.00,"
     assert lines[4] == "N/A,,93.3"
+
+
+def test_contingency_output_filters_merged_request_types():
+    from ASFINT.Pipeline.workflow import contingency_from_merged
+
+    merged = pd.DataFrame([
+        {"FR Request Type": "Contingency", "Agenda Request Type": "Contingency", "FR Org Name": "A"},
+        {"FR Request Type": "Sponsorship", "Agenda Request Type": "Sponsorship", "FR Org Name": "B"},
+        {"FR Request Type": None, "Agenda Request Type": "Contingency Funding", "FR Org Name": "C"},
+    ])
+
+    out = contingency_from_merged(merged)
+
+    assert list(out["FR Org Name"]) == ["A", "C"]
+
+
+def test_week_output_writes_contingency_artifact(tmp_path):
+    from ASFINT.Pipeline.workflow import FinanceCommitteeWeekResult, _write_finance_committee_week
+
+    merged = pd.DataFrame([
+        {"FR Request Type": "Contingency", "Agenda Request Type": "Contingency", "FR Org Name": "A"},
+        {"FR Request Type": "Sponsorship", "Agenda Request Type": "Sponsorship", "FR Org Name": "B"},
+    ])
+    result = FinanceCommitteeWeekResult(
+        week="F7",
+        meeting_date="2026-10-12",
+        status="complete",
+        fr=pd.DataFrame(),
+        agenda=pd.DataFrame(),
+        merged=merged,
+    )
+
+    manifest_row = _write_finance_committee_week(result, tmp_path)
+    path = tmp_path / "F7_2026-10-12" / "F7_2026-10-12_contingency.csv"
+
+    assert path.is_file()
+    assert manifest_row["contingency_rows"] == 1
+    assert len(pd.read_csv(path)) == 1

@@ -44,7 +44,7 @@ def delete_dataset(dataset_id: int, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# File upload / download (Week 2 — attaches a source file to a dataset)
+# Legacy direct dataset attachment routes
 # ---------------------------------------------------------------------------
 
 

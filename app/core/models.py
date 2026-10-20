@@ -2,12 +2,14 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     JSON,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.sql import func
 
@@ -24,11 +26,28 @@ class Dataset(Base):
     schema_def = Column(JSON, nullable=True)      # list of {name, dtype} column descriptors
     validation_cfg = Column(JSON, nullable=True)  # per-validator config overrides
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    is_deleted = Column(Boolean, default=False, nullable=False)
+    is_deleted = Column(Boolean, default=False, server_default='false', nullable=False)
+
+
+class CollectionPeriod(Base):
+    """Admin-managed period that is allowed to receive source ingestions."""
+
+    __tablename__ = "collection_periods"
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "label", name="uq_collection_periods_dataset_label"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    label = Column(String, nullable=False)
+    starts_on = Column(Date, nullable=False)
+    ends_on = Column(Date, nullable=False)
+    accept_uploads = Column(Boolean, default=False, server_default='false', nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class DatasetUpload(Base):
-    """Stores files attached directly to a dataset (Week 2 upload feature)."""
+    """Stores files attached through the legacy direct dataset-upload route."""
 
     __tablename__ = "dataset_uploads"
 
@@ -49,12 +68,16 @@ class Ingestion(Base):
     id = Column(Integer, primary_key=True, index=True)
     dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
     # pending → processing → validated / validation_failed → clean_ready / failed
-    status = Column(String, nullable=False, default="pending", index=True)
+    status = Column(String, nullable=False, default="pending", server_default="pending", index=True)
     original_filename = Column(String, nullable=False)
     file_ext = Column(String, nullable=False)
     raw_path = Column(String, nullable=True)
     raw_path_secondary = Column(String, nullable=True)
     clean_path = Column(String, nullable=True)
+    period_id = Column(Integer, ForeignKey("collection_periods.id"), nullable=True, index=True)
+    source_role = Column(String, nullable=True)
+    meeting_week = Column(String, nullable=True)
+    meeting_date = Column(Date, nullable=True, index=True)
     fr_ingestion_id = Column(Integer, ForeignKey("ingestions.id"), nullable=True)
     agenda_ingestion_id = Column(Integer, ForeignKey("ingestions.id"), nullable=True)
     file_size_bytes = Column(BigInteger, nullable=True)
@@ -67,6 +90,54 @@ class Ingestion(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class ProcessingRun(Base):
+    __tablename__ = "processing_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    period_id = Column(Integer, ForeignKey("collection_periods.id"), nullable=True, index=True)
+    parent_run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=True, index=True)
+    run_type = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending", server_default="pending", index=True)
+    label = Column(String, nullable=True)
+    meeting_week = Column(String, nullable=True)
+    meeting_date = Column(Date, nullable=True, index=True)
+    triggered_by = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
+class RunInput(Base):
+    __tablename__ = "run_inputs"
+    __table_args__ = (
+        UniqueConstraint("run_id", "ingestion_id", name="uq_run_inputs_run_ingestion"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=False, index=True)
+    ingestion_id = Column(Integer, ForeignKey("ingestions.id"), nullable=False, index=True)
+    input_role = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class RunArtifact(Base):
+    __tablename__ = "run_artifacts"
+    __table_args__ = (
+        UniqueConstraint("run_id", "artifact_type", name="uq_run_artifacts_run_type"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=False, index=True)
+    artifact_type = Column(String, nullable=False)
+    storage_path = Column(String, nullable=False)
+    file_format = Column(String, nullable=True)
+    row_count = Column(Integer, nullable=True)
+    file_sha256 = Column(String(64), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class ValidationResult(Base):
     __tablename__ = "validation_results"
 
@@ -74,7 +145,7 @@ class ValidationResult(Base):
     ingestion_id = Column(Integer, ForeignKey("ingestions.id"), nullable=False, index=True)
     check_name = Column(String, nullable=False)
     status = Column(String, nullable=False)  # pass / fail / warn / skipped
-    severity = Column(String, nullable=False, default="error")  # error / warning / info
+    severity = Column(String, nullable=False, default="error", server_default="error")  # error / warning / info
     details = Column(JSON, nullable=True)    # machine-readable specifics (e.g. missing columns)
     message = Column(Text, nullable=True)
     ran_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -92,4 +163,4 @@ class PublishedVersion(Base):
     file_sha256 = Column(String(64), nullable=True)
     published_at = Column(DateTime(timezone=True), server_default=func.now())
     published_by = Column(String, nullable=True)
-    is_latest = Column(Boolean, default=True, nullable=False)
+    is_latest = Column(Boolean, default=True, server_default='true', nullable=False)

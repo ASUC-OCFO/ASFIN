@@ -1,10 +1,12 @@
 import hashlib
 from pathlib import Path
+import shutil
 
 from fastapi import HTTPException, UploadFile  # UploadFile used by create()
 from sqlalchemy.orm import Session
 
 from app.core.models import Dataset, Ingestion
+from app.services.ficomm_preflight import preflight_ficomm_upload
 from app.services.storage import StorageService
 
 
@@ -45,7 +47,15 @@ class IngestionService:
         filename = file.filename or "upload"
         ext = Path(filename).suffix.lower() or ".bin"
 
-        # 4. Insert ingestion row (status='pending') — we need the id before writing to disk
+        preflight = None
+        if dataset.process_type == "FICOMM":
+            preflight = preflight_ficomm_upload(
+                self.db,
+                dataset_id=dataset.id,
+                filename=filename,
+                content=content,
+            )
+
         ingestion = Ingestion(
             dataset_id=dataset_id,
             status="pending",
@@ -53,21 +63,30 @@ class IngestionService:
             file_ext=ext,
             file_size_bytes=len(content),
             file_sha256=sha256,
+            period_id=preflight.period_id if preflight else None,
+            source_role=preflight.source_role if preflight else None,
+            meeting_week=preflight.meeting_week if preflight else None,
+            meeting_date=preflight.meeting_date if preflight else None,
         )
-        self.db.add(ingestion)
-        self.db.commit()
-        self.db.refresh(ingestion)
 
-        # 5. Write raw file to /data/raw/{dataset_id}/{ingestion_id}/original.{ext}
-        StorageService.ensure_raw_dir(dataset_id, ingestion.id)
-        raw_path = StorageService.raw_path(dataset_id, ingestion.id, ext)
-        raw_path.write_bytes(content)
+        raw_dir = None
+        try:
+            self.db.add(ingestion)
+            self.db.flush()
 
-        ingestion.raw_path = str(raw_path)
-        self.db.commit()
-        self.db.refresh(ingestion)
+            raw_dir = StorageService.ensure_raw_dir(dataset_id, ingestion.id)
+            raw_path = StorageService.raw_path(dataset_id, ingestion.id, ext)
+            raw_path.write_bytes(content)
 
-        return ingestion
+            ingestion.raw_path = str(raw_path)
+            self.db.commit()
+            self.db.refresh(ingestion)
+            return ingestion
+        except Exception:
+            self.db.rollback()
+            if raw_dir is not None:
+                shutil.rmtree(raw_dir, ignore_errors=True)
+            raise
 
     def create_reconcile(
         self, dataset_id: int, fr_ingestion_id: int, agenda_ingestion_id: int

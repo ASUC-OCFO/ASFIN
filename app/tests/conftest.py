@@ -4,7 +4,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import app.api.main as api_main
 from app.api.main import app
 from app.core.database import Base, get_db
 
@@ -27,12 +26,11 @@ def db():
 
 
 @pytest.fixture(scope="function")
-def client(db, monkeypatch):
+def client(db):
     def _override():
         yield db
 
     app.dependency_overrides[get_db] = _override
-    monkeypatch.setattr(api_main, "engine", db.get_bind())
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
