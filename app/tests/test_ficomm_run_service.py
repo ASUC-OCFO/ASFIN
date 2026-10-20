@@ -125,3 +125,20 @@ def test_weekly_ficomm_run_is_idempotent_for_same_pair(db, tmp_path, monkeypatch
     assert second is not None
     assert second.id == first.id
     assert db.query(ProcessingRun).count() == 1
+
+
+def test_weekly_ficomm_run_retries_after_failed_run(db, tmp_path, monkeypatch):
+    monkeypatch.setattr(storage_module, "DATA_ROOT", tmp_path / "data")
+    fr, agenda = _context(db, tmp_path)
+
+    first = FiCommRunService(db).process_ready_week(agenda.id)
+    assert first is not None
+    first.status = "failed"
+    db.commit()
+
+    second = FiCommRunService(db).process_ready_week(fr.id)
+
+    assert second is not None
+    assert second.id != first.id
+    assert second.status == "completed"
+    assert db.query(ProcessingRun).count() == 2
