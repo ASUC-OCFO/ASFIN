@@ -150,7 +150,7 @@ def test_records_endpoint_filters_queryable_data(client, db):
         params={
             "period_id": period.id,
             "organization": "example",
-            "is_contingency": "true",
+            "contingency": "true",
             "fr_amount_requested_min": "100",
         },
     )

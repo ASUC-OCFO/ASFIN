@@ -21,7 +21,7 @@ def list_ficomm_records(
     meeting_week: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-    is_contingency: bool | None = None,
+    is_contingency: bool | None = Query(None, alias="contingency"),
     organization: str | None = None,
     request_type: str | None = None,
     committee_status: str | None = None,
