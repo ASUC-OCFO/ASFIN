@@ -4,6 +4,7 @@ import argparse
 
 from app.core.database import SessionLocal
 from app.core.models import ProcessingRun
+from app.services.ficomm_publication_service import FiCommPublicationService
 from app.services.ficomm_run_service import FiCommRunService
 
 
@@ -26,6 +27,20 @@ def _build_parser() -> argparse.ArgumentParser:
     periods.add_argument("--label")
     periods.add_argument("--triggered-by")
 
+    publish = subparsers.add_parser(
+        "publish-run",
+        help="Load a completed weekly FiComm run into queryable tables",
+    )
+    publish.add_argument("run_id", type=int)
+    publish.add_argument("--published-by")
+
+    publish_period = subparsers.add_parser(
+        "publish-period",
+        help="Publish completed weekly FiComm runs in one collection period",
+    )
+    publish_period.add_argument("period_id", type=int)
+    publish_period.add_argument("--published-by")
+
     subparsers.add_parser("list-runs", help="List FiComm processing runs")
     return parser
 
@@ -33,7 +48,8 @@ def _build_parser() -> argparse.ArgumentParser:
 def _print_run(run: ProcessingRun) -> None:
     print(
         f"{run.id}\ttype={run.run_type}\tstatus={run.status}\t"
-        f"period={run.period_id}\tparent={run.parent_run_id}\tlabel={run.label or ''}"
+        f"publication={run.publication_status or '-'}\tperiod={run.period_id}\t"
+        f"parent={run.parent_run_id}\tlabel={run.label or ''}"
     )
 
 
@@ -52,6 +68,29 @@ def main() -> int:
                 triggered_by=args.triggered_by,
             )
             _print_run(run)
+        elif args.command == "publish-run":
+            result = FiCommPublicationService(db).publish_run(
+                args.run_id,
+                published_by=args.published_by,
+            )
+            print(
+                f"{result.run_id}\trecords={result.records.row_count}\t"
+                f"review_flags={result.review_flags.row_count}"
+            )
+        elif args.command == "publish-period":
+            result = FiCommPublicationService(db).publish_period(
+                args.period_id,
+                published_by=args.published_by,
+            )
+            print(
+                f"period={result.period_id}\tattempted={result.attempted}\t"
+                f"published={result.published}\tskipped={result.skipped}\t"
+                f"failed={result.failed}"
+            )
+            for error in result.errors:
+                print(f"error: {error}")
+            if result.failed:
+                return 1
         else:
             runs = (
                 db.query(ProcessingRun)

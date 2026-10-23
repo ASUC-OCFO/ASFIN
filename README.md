@@ -20,10 +20,12 @@ Upload
   -> FiComm preflight / period check
   -> weekly ProcessingRun
   -> RunArtifact records + processed CSVs
+  -> queryable PostgreSQL rows
 
 Bulk FiComm run
   -> parent ProcessingRun
   -> weekly child ProcessingRuns
+  -> weekly queryable rows
   -> parent manifest / review outputs
 ```
 
@@ -34,7 +36,7 @@ Important storage paths are:
 /data/processed/{dataset_id}/{run_id}/...
 ```
 
-PostgreSQL records datasets, collection periods, ingestions, processing runs, run inputs, artifacts, validation results, and legacy publish metadata. Processed FiComm rows are currently stored as durable CSV artifacts; they are not yet loaded into queryable PostgreSQL tables.
+PostgreSQL records datasets, collection periods, ingestions, processing runs, run inputs, artifacts, queryable FiComm rows, review flags, validation results, and legacy publish metadata. Processed CSV artifacts remain the reproducible file-level outputs, while selected FiComm artifacts are also loaded into typed PostgreSQL tables for querying.
 
 ## Development Setup
 
@@ -126,6 +128,38 @@ When both source roles for a meeting week are available, ASFIN creates a weekly 
 
 `contingency.csv` is derived from the merged output by retaining rows whose normalized request type is `Contingency`.
 
+Successful weekly FiComm runs automatically publish their merged records and review flags into PostgreSQL after the file artifacts are written. Processing and publication are tracked separately: a run can remain successfully processed even if publication fails and needs to be retried.
+
+## Queryable FiComm Data
+
+The queryable layer loads the canonical `merged.csv` output into `ficomm_records` and the weekly `review_flags.csv` output into `ficomm_review_flags`. Each published source artifact is recorded in `queryable_artifacts`, including its processing run, source hash, row count, and publication metadata.
+
+The database keeps FR and Agenda values in separate columns rather than selecting one source as authoritative. Contingency records are identified with `is_contingency`; the separate `contingency.csv` file remains available as a processing artifact but is not duplicated into another query table.
+
+Read-only FiComm endpoints are available at:
+
+```text
+GET /api/v1/ficomm/records
+GET /api/v1/ficomm/records/{record_id}
+GET /api/v1/ficomm/review-flags
+```
+
+Record queries support filters for collection period, meeting week/date, contingency status, organization, request type, committee status, match type, and source-specific amount ranges. Review-flag queries support collection period, meeting week/date, severity, code, and source filters. Both list endpoints are paginated.
+
+For example:
+
+```bash
+curl -s "http://127.0.0.1:8000/api/v1/ficomm/records?contingency=true&organization=Example"
+```
+
+By default, queries return the newest published processing run for each collection-period/week combination. Add `include_history=true` to include prior published versions. A historical run published later does not replace a newer processing run as the current result.
+
+A completed weekly run can also be published or retried manually:
+
+```bash
+docker compose exec -T api python -m app.admin.ficomm publish-run 5
+```
+
 ## Bulk FiComm Processing
 
 Historical or semester-level processing reuses the weekly workflow and records a parent bulk run with weekly child runs.
@@ -147,6 +181,14 @@ List processing runs:
 ```bash
 docker compose exec -T api python -m app.admin.ficomm list-runs
 ```
+
+Publish completed weekly runs in one collection period that are not already published:
+
+```bash
+docker compose exec -T api python -m app.admin.ficomm publish-period 1
+```
+
+The backfill continues past individual publication failures and reports attempted, published, skipped, and failed counts. Already-published runs are skipped.
 
 The parent bulk run stores:
 
@@ -211,9 +253,9 @@ pytest tests/test_ficomm_pipeline.py -q
 
 ## Current Scope
 
-This branch establishes local persistent storage, Alembic-managed metadata, FiComm upload preflight, weekly processing, and bulk processing. Authentication/authorization, production deployment and backups, and the redesign that loads processed artifacts into queryable PostgreSQL tables are separate follow-up work.
+ASFIN currently supports local persistent storage, Alembic-managed metadata, FiComm upload preflight, weekly and bulk processing, automatic publication of completed weekly FiComm results, historical publication backfills, and read-only querying of published FiComm records and review flags.
 
-The current Docker setup binds services to localhost and should not be exposed directly to an untrusted network.
+Authentication/authorization, production deployment and backups, ABSA ingestion/query integration, and removal of legacy compatibility paths remain separate follow-up work. The current Docker setup binds services to localhost and should not be exposed directly to an untrusted network.
 
 ## Repository Structure
 
@@ -231,7 +273,7 @@ app/
   admin/        Backend administration commands
   api/          FastAPI application and routes
   core/         Database, models, schemas, and job runner
-  services/     Ingestion, storage, processing, and publishing services
+  services/     Ingestion, storage, processing, publication, and query services
   tests/        Service/API tests
 
 alembic/        Database migrations

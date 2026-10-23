@@ -4,7 +4,15 @@ from pathlib import Path
 import pandas as pd
 from docx import Document
 
-from app.core.models import CollectionPeriod, Dataset, Ingestion, ProcessingRun, RunArtifact
+from app.core.models import (
+    CollectionPeriod,
+    Dataset,
+    FiCommRecord,
+    Ingestion,
+    ProcessingRun,
+    QueryableArtifact,
+    RunArtifact,
+)
 from app.services import storage as storage_module
 from app.services.ficomm_run_service import FiCommRunService
 
@@ -88,6 +96,11 @@ def test_weekly_ficomm_run_persists_processed_artifacts(db, tmp_path, monkeypatc
 
     assert run is not None
     assert run.status == "completed"
+    assert run.publication_status == "published"
+    assert run.publication_error is None
+    assert run.publication_completed_at is not None
+    assert db.query(QueryableArtifact).filter(QueryableArtifact.run_id == run.id).count() == 2
+    assert db.query(FiCommRecord).filter(FiCommRecord.run_id == run.id).count() == 1
     artifacts = db.query(RunArtifact).filter(RunArtifact.run_id == run.id).all()
     assert {artifact.artifact_type for artifact in artifacts} == {
         "fr_cleaned",
@@ -142,3 +155,23 @@ def test_weekly_ficomm_run_retries_after_failed_run(db, tmp_path, monkeypatch):
     assert second.id != first.id
     assert second.status == "completed"
     assert db.query(ProcessingRun).count() == 2
+
+
+def test_weekly_processing_stays_completed_when_publication_fails(
+    db, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(storage_module, "DATA_ROOT", tmp_path / "data")
+    monkeypatch.setattr(FiCommRunService, "_sha256", staticmethod(lambda path: "0" * 64))
+    _, agenda = _context(db, tmp_path)
+
+    run = FiCommRunService(db).process_ready_week(agenda.id)
+
+    assert run is not None
+    assert run.status == "completed"
+    assert run.publication_status == "failed"
+    assert "SHA-256" in run.publication_error
+    assert run.publication_completed_at is not None
+    assert db.query(QueryableArtifact).filter(QueryableArtifact.run_id == run.id).count() == 0
+    artifacts = db.query(RunArtifact).filter(RunArtifact.run_id == run.id).all()
+    assert len(artifacts) == 5
+    assert all(Path(artifact.storage_path).is_file() for artifact in artifacts)

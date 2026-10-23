@@ -7,6 +7,8 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     JSON,
+    Float,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -107,6 +109,9 @@ class ProcessingRun(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
+    publication_status = Column(String, nullable=True, index=True)
+    publication_error = Column(Text, nullable=True)
+    publication_completed_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class RunInput(Base):
@@ -135,6 +140,92 @@ class RunArtifact(Base):
     file_format = Column(String, nullable=True)
     row_count = Column(Integer, nullable=True)
     file_sha256 = Column(String(64), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QueryableArtifact(Base):
+    __tablename__ = "queryable_artifacts"
+    __table_args__ = (
+        UniqueConstraint("artifact_id", name="uq_queryable_artifacts_artifact"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    artifact_id = Column(Integer, ForeignKey("run_artifacts.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=False, index=True)
+    query_type = Column(String, nullable=False, index=True)
+    row_count = Column(Integer, nullable=False)
+    source_sha256 = Column(String(64), nullable=True)
+    published_at = Column(DateTime(timezone=True), server_default=func.now())
+    published_by = Column(String, nullable=True)
+
+
+class FiCommRecord(Base):
+    __tablename__ = "ficomm_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "queryable_artifact_id",
+            "source_row_number",
+            name="uq_ficomm_records_artifact_row",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    queryable_artifact_id = Column(
+        Integer, ForeignKey("queryable_artifacts.id"), nullable=False, index=True
+    )
+    run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=False, index=True)
+    period_id = Column(Integer, ForeignKey("collection_periods.id"), nullable=True, index=True)
+    source_row_number = Column(Integer, nullable=False)
+    meeting_week = Column(String, nullable=False, index=True)
+    meeting_date = Column(Date, nullable=False, index=True)
+    is_contingency = Column(Boolean, nullable=False, default=False, server_default='false', index=True)
+
+    document_match_type = Column(String, nullable=True)
+    document_match_score = Column(Float, nullable=True)
+    fr_org_name = Column(Text, nullable=True)
+    agenda_org_name = Column(Text, nullable=True)
+    fr_request_type = Column(String, nullable=True)
+    agenda_request_type = Column(String, nullable=True)
+    fr_appx = Column(String, nullable=True)
+    fr_org_type_year = Column(String, nullable=True)
+    fr_amount_requested = Column(Numeric(14, 2), nullable=True)
+    fr_amount = Column(Numeric(14, 2), nullable=True)
+    agenda_amount = Column(Numeric(14, 2), nullable=True)
+    fr_committee_status = Column(String, nullable=True)
+    agenda_committee_status = Column(String, nullable=True)
+    fr_funding_source = Column(String, nullable=True)
+    fr_primary_contact = Column(Text, nullable=True)
+    fr_email_address = Column(String, nullable=True)
+    fr_date = Column(Date, nullable=True)
+    agenda_date = Column(Date, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class FiCommReviewFlag(Base):
+    __tablename__ = "ficomm_review_flags"
+    __table_args__ = (
+        UniqueConstraint(
+            "queryable_artifact_id",
+            "source_row_number",
+            name="uq_ficomm_review_flags_artifact_row",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    queryable_artifact_id = Column(
+        Integer, ForeignKey("queryable_artifacts.id"), nullable=False, index=True
+    )
+    run_id = Column(Integer, ForeignKey("processing_runs.id"), nullable=False, index=True)
+    period_id = Column(Integer, ForeignKey("collection_periods.id"), nullable=True, index=True)
+    source_row_number = Column(Integer, nullable=False)
+    meeting_week = Column(String, nullable=True, index=True)
+    meeting_date = Column(Date, nullable=True, index=True)
+    severity = Column(String, nullable=False, index=True)
+    code = Column(String, nullable=False, index=True)
+    message = Column(Text, nullable=False)
+    source = Column(String, nullable=True)
+    details = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
