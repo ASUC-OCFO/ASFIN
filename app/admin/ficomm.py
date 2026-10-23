@@ -4,6 +4,7 @@ import argparse
 
 from app.core.database import SessionLocal
 from app.core.models import ProcessingRun
+from app.services.ficomm_publication_service import FiCommPublicationService
 from app.services.ficomm_run_service import FiCommRunService
 
 
@@ -25,6 +26,13 @@ def _build_parser() -> argparse.ArgumentParser:
     periods.add_argument("period_ids", nargs="+", type=int)
     periods.add_argument("--label")
     periods.add_argument("--triggered-by")
+
+    publish = subparsers.add_parser(
+        "publish-run",
+        help="Load a completed weekly FiComm run into queryable tables",
+    )
+    publish.add_argument("run_id", type=int)
+    publish.add_argument("--published-by")
 
     subparsers.add_parser("list-runs", help="List FiComm processing runs")
     return parser
@@ -52,6 +60,15 @@ def main() -> int:
                 triggered_by=args.triggered_by,
             )
             _print_run(run)
+        elif args.command == "publish-run":
+            result = FiCommPublicationService(db).publish_run(
+                args.run_id,
+                published_by=args.published_by,
+            )
+            print(
+                f"{result.run_id}\trecords={result.records.row_count}\t"
+                f"review_flags={result.review_flags.row_count}"
+            )
         else:
             runs = (
                 db.query(ProcessingRun)
