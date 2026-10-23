@@ -189,11 +189,11 @@ class FiCommQueryService:
         return items, total
 
     def _filter_to_latest_runs(self, query: Query, run_id_column) -> Query:
-        latest_publications = (
+        latest_runs = (
             self.db.query(
                 ProcessingRun.period_id.label("period_id"),
                 ProcessingRun.meeting_week.label("meeting_week"),
-                func.max(QueryableArtifact.id).label("publication_id"),
+                func.max(ProcessingRun.id).label("run_id"),
             )
             .join(QueryableArtifact, QueryableArtifact.run_id == ProcessingRun.id)
             .filter(
@@ -204,13 +204,7 @@ class FiCommQueryService:
             .subquery()
         )
 
-        latest_run_ids = (
-            select(QueryableArtifact.run_id)
-            .join(
-                latest_publications,
-                QueryableArtifact.id == latest_publications.c.publication_id,
-            )
-        )
+        latest_run_ids = select(latest_runs.c.run_id)
         return query.filter(run_id_column.in_(latest_run_ids))
 
     @staticmethod

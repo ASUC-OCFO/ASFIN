@@ -109,6 +109,9 @@ class ProcessingRun(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
+    publication_status = Column(String, nullable=True, index=True)
+    publication_error = Column(Text, nullable=True)
+    publication_completed_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class RunInput(Base):

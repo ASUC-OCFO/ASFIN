@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -10,6 +10,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.core.models import (
+    CollectionPeriod,
     Dataset,
     FiCommRecord,
     FiCommReviewFlag,
@@ -24,6 +25,16 @@ class FiCommPublicationResult:
     run_id: int
     records: QueryableArtifact
     review_flags: QueryableArtifact
+
+
+@dataclass(slots=True)
+class FiCommPeriodPublicationResult:
+    period_id: int
+    attempted: int
+    published: int
+    skipped: int
+    failed: int
+    errors: list[str]
 
 
 class FiCommPublicationService:
@@ -45,13 +56,104 @@ class FiCommPublicationService:
             raise LookupError(f"Processing run {run_id} not found")
         if run.run_type != "weekly" or run.status != "completed":
             raise ValueError("Only completed weekly processing runs can be published")
+
+        try:
+            self._validate_run(run)
+            artifacts = self._queryable_artifacts(run)
+            records = self._publish_records(
+                run,
+                artifacts[self.RECORD_ARTIFACT_TYPE],
+                published_by,
+            )
+            review_flags = self._publish_review_flags(
+                run,
+                artifacts[self.REVIEW_ARTIFACT_TYPE],
+                published_by,
+            )
+            run.publication_status = "published"
+            run.publication_error = None
+            run.publication_completed_at = datetime.now(timezone.utc)
+            self.db.commit()
+            self.db.refresh(records)
+            self.db.refresh(review_flags)
+            self.db.refresh(run)
+            return FiCommPublicationResult(
+                run_id=run.id,
+                records=records,
+                review_flags=review_flags,
+            )
+        except Exception as exc:
+            self.db.rollback()
+            self._mark_publication_failed(run_id, exc)
+            raise
+
+    def publish_period(
+        self,
+        period_id: int,
+        published_by: str | None = None,
+    ) -> FiCommPeriodPublicationResult:
+        period = (
+            self.db.query(CollectionPeriod)
+            .filter(CollectionPeriod.id == period_id)
+            .first()
+        )
+        if not period:
+            raise LookupError(f"Collection period {period_id} not found")
+
+        dataset = self.db.query(Dataset).filter(Dataset.id == period.dataset_id).first()
+        if not dataset or dataset.process_type != "FICOMM":
+            raise ValueError("Queryable FiComm publication requires a FICOMM period")
+
+        runs = (
+            self.db.query(ProcessingRun)
+            .filter(
+                ProcessingRun.dataset_id == dataset.id,
+                ProcessingRun.period_id == period.id,
+                ProcessingRun.run_type == "weekly",
+                ProcessingRun.status == "completed",
+            )
+            .order_by(
+                ProcessingRun.meeting_date,
+                ProcessingRun.meeting_week,
+                ProcessingRun.id,
+            )
+            .all()
+        )
+
+        attempted = 0
+        published = 0
+        skipped = 0
+        errors: list[str] = []
+        for run in runs:
+            if run.publication_status == "published":
+                skipped += 1
+                continue
+            attempted += 1
+            try:
+                self.publish_run(run.id, published_by=published_by)
+                published += 1
+            except (LookupError, ValueError) as exc:
+                errors.append(f"run {run.id}: {exc}")
+            except Exception as exc:
+                errors.append(f"run {run.id}: {type(exc).__name__}: {exc}")
+
+        return FiCommPeriodPublicationResult(
+            period_id=period.id,
+            attempted=attempted,
+            published=published,
+            skipped=skipped,
+            failed=len(errors),
+            errors=errors,
+        )
+
+    def _validate_run(self, run: ProcessingRun) -> None:
         if not run.meeting_week or not run.meeting_date:
             raise ValueError("FiComm weekly run is missing meeting metadata")
-
         dataset = self.db.query(Dataset).filter(Dataset.id == run.dataset_id).first()
         if not dataset or dataset.process_type != "FICOMM":
             raise ValueError("Queryable FiComm publication requires a FICOMM dataset")
 
+    def _queryable_artifacts(self, run: ProcessingRun) -> dict[str, RunArtifact]:
         artifacts = {
             artifact.artifact_type: artifact
             for artifact in self.db.query(RunArtifact)
@@ -73,29 +175,16 @@ class FiCommPublicationService:
                 "Completed FiComm run is missing queryable artifact(s): "
                 + ", ".join(missing)
             )
+        return artifacts
 
-        try:
-            records = self._publish_records(
-                run,
-                artifacts[self.RECORD_ARTIFACT_TYPE],
-                published_by,
-            )
-            review_flags = self._publish_review_flags(
-                run,
-                artifacts[self.REVIEW_ARTIFACT_TYPE],
-                published_by,
-            )
-            self.db.commit()
-            self.db.refresh(records)
-            self.db.refresh(review_flags)
-            return FiCommPublicationResult(
-                run_id=run.id,
-                records=records,
-                review_flags=review_flags,
-            )
-        except Exception:
-            self.db.rollback()
-            raise
+    def _mark_publication_failed(self, run_id: int, exc: Exception) -> None:
+        run = self.db.query(ProcessingRun).filter(ProcessingRun.id == run_id).first()
+        if not run or run.run_type != "weekly" or run.status != "completed":
+            return
+        run.publication_status = "failed"
+        run.publication_error = str(exc)
+        run.publication_completed_at = datetime.now(timezone.utc)
+        self.db.commit()
 
     def _publish_records(
         self,

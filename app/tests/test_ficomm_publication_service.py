@@ -144,6 +144,10 @@ def test_publish_run_loads_merged_records_and_review_flags(db, tmp_path):
 
     result = FiCommPublicationService(db).publish_run(run.id, published_by="test-admin")
 
+    db.refresh(run)
+    assert run.publication_status == "published"
+    assert run.publication_error is None
+    assert run.publication_completed_at is not None
     assert result.run_id == run.id
     assert result.records.artifact_id == merged_artifact.id
     assert result.records.row_count == 1
@@ -196,6 +200,10 @@ def test_publish_run_rejects_changed_artifact(db, tmp_path):
     with pytest.raises(ValueError, match="SHA-256"):
         FiCommPublicationService(db).publish_run(run.id)
 
+    db.refresh(run)
+    assert run.publication_status == "failed"
+    assert "SHA-256" in run.publication_error
+    assert run.publication_completed_at is not None
     assert db.query(QueryableArtifact).count() == 0
     assert db.query(FiCommRecord).count() == 0
 
@@ -207,3 +215,40 @@ def test_publish_run_requires_completed_weekly_run(db, tmp_path):
 
     with pytest.raises(ValueError, match="completed weekly"):
         FiCommPublicationService(db).publish_run(run.id)
+
+
+def test_publish_period_backfills_unpublished_completed_runs(db, tmp_path):
+    run, _, _ = _context(db, tmp_path)
+    service = FiCommPublicationService(db)
+
+    first = service.publish_period(run.period_id, published_by="backfill-admin")
+
+    assert first.period_id == run.period_id
+    assert first.attempted == 1
+    assert first.published == 1
+    assert first.skipped == 0
+    assert first.failed == 0
+    assert first.errors == []
+
+    second = service.publish_period(run.period_id, published_by="backfill-admin")
+
+    assert second.attempted == 0
+    assert second.published == 0
+    assert second.skipped == 1
+    assert second.failed == 0
+
+
+def test_publish_period_continues_after_run_failure(db, tmp_path):
+    run, merged_artifact, _ = _context(db, tmp_path)
+    Path(merged_artifact.storage_path).write_text("changed\n", encoding="utf-8")
+
+    result = FiCommPublicationService(db).publish_period(run.period_id)
+
+    db.refresh(run)
+    assert result.attempted == 1
+    assert result.published == 0
+    assert result.skipped == 0
+    assert result.failed == 1
+    assert result.errors and f"run {run.id}:" in result.errors[0]
+    assert run.status == "completed"
+    assert run.publication_status == "failed"

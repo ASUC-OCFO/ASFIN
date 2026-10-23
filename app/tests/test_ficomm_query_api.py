@@ -289,3 +289,85 @@ def test_invalid_amount_range_returns_422(client):
     )
     assert response.status_code == 422
     assert "minimum cannot exceed maximum" in response.json()["detail"]
+
+
+def test_latest_records_use_processing_run_order_not_backfill_publication_order(client, db):
+    _, period = _context(db)
+
+    old_run = ProcessingRun(
+        dataset_id=period.dataset_id,
+        period_id=period.id,
+        run_type="weekly",
+        status="completed",
+        meeting_week="F07",
+        meeting_date=date(2026, 10, 12),
+    )
+    db.add(old_run)
+    db.flush()
+    old_merged = RunArtifact(
+        run_id=old_run.id,
+        artifact_type="merged",
+        storage_path=f"/data/test/{old_run.id}/merged.csv",
+        file_format="csv",
+        row_count=1,
+    )
+    old_review = RunArtifact(
+        run_id=old_run.id,
+        artifact_type="review_flags",
+        storage_path=f"/data/test/{old_run.id}/review_flags.csv",
+        file_format="csv",
+        row_count=0,
+    )
+    db.add_all([old_merged, old_review])
+    db.commit()
+
+    new_run, _ = _published_run(
+        db,
+        period=period,
+        week="F07",
+        meeting_date=date(2026, 10, 12),
+        org="Corrected Organization Name",
+    )
+
+    old_records_publication = QueryableArtifact(
+        artifact_id=old_merged.id,
+        dataset_id=period.dataset_id,
+        run_id=old_run.id,
+        query_type="ficomm_records",
+        row_count=1,
+    )
+    old_review_publication = QueryableArtifact(
+        artifact_id=old_review.id,
+        dataset_id=period.dataset_id,
+        run_id=old_run.id,
+        query_type="ficomm_review_flags",
+        row_count=0,
+    )
+    db.add_all([old_records_publication, old_review_publication])
+    db.flush()
+    db.add(
+        FiCommRecord(
+            queryable_artifact_id=old_records_publication.id,
+            run_id=old_run.id,
+            period_id=period.id,
+            source_row_number=1,
+            meeting_week="F07",
+            meeting_date=date(2026, 10, 12),
+            is_contingency=False,
+            document_match_type="Exact",
+            document_match_score=100.0,
+            fr_org_name="Old Organization Name",
+            agenda_org_name="Old Organization Name",
+            fr_request_type="Sponsorship",
+            agenda_request_type="Sponsorship",
+        )
+    )
+    db.commit()
+
+    response = client.get("/api/v1/ficomm/records")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["run_id"] == new_run.id
+    assert body["items"][0]["fr_org_name"] == "Corrected Organization Name"

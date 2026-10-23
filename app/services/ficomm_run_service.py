@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,9 @@ from app.core.models import (
     RunInput,
 )
 from app.services.storage import StorageService
+
+
+logger = logging.getLogger(__name__)
 
 
 class FiCommRunService:
@@ -236,6 +240,8 @@ class FiCommRunService:
         input_ids = {ingestion.id for ingestion in inputs}
         existing = self._find_existing_weekly_run(input_ids, parent_run_id)
         if existing:
+            if existing.status == "completed" and existing.publication_status != "published":
+                return self._attempt_publication(existing.id, triggered_by)
             return existing
 
         meeting_date = agenda.meeting_date if agenda and agenda.meeting_date else fr.meeting_date
@@ -302,9 +308,11 @@ class FiCommRunService:
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
             run.error_message = None
+            run.publication_status = "pending"
+            run.publication_error = None
+            run.publication_completed_at = None
             self.db.commit()
             self.db.refresh(run)
-            return run
         except Exception as exc:
             self.db.rollback()
             shutil.rmtree(run_dir, ignore_errors=True)
@@ -314,6 +322,33 @@ class FiCommRunService:
             failed.completed_at = datetime.now(timezone.utc)
             self.db.commit()
             return failed
+
+        return self._attempt_publication(run.id, triggered_by)
+
+    def _attempt_publication(
+        self,
+        run_id: int,
+        published_by: str | None = None,
+    ) -> ProcessingRun:
+        from app.services.ficomm_publication_service import FiCommPublicationService
+
+        try:
+            FiCommPublicationService(self.db).publish_run(
+                run_id,
+                published_by=published_by or "system",
+            )
+        except Exception as exc:
+            self.db.rollback()
+            run = self.db.query(ProcessingRun).filter(ProcessingRun.id == run_id).one()
+            if run.publication_status != "failed":
+                run.publication_status = "failed"
+                run.publication_error = str(exc)
+                run.publication_completed_at = datetime.now(timezone.utc)
+                self.db.commit()
+            logger.exception("FiComm publication failed for processing run %s", run_id)
+
+        self.db.expire_all()
+        return self.db.query(ProcessingRun).filter(ProcessingRun.id == run_id).one()
 
     def _group_bulk_inputs(
         self,
