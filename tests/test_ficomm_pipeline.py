@@ -8,7 +8,9 @@ from ASFINT.Transform.Reconciliation_Processor import Merge_FR_Agenda
 
 
 def test_week_normalization():
-    assert _normalize_week("FR 25_26 F02.xlsx") == "F2"
+    assert _normalize_week("FR 25_26 F02.xlsx") == "F02"
+    assert _normalize_week("FR 25_26 F2.xlsx") == "F02"
+    assert _normalize_week("FR 25/26 S9") == "S09"
     assert _normalize_week("FR 25/26 S12") == "S12"
 
 
@@ -350,7 +352,7 @@ def test_week_output_writes_contingency_artifact(tmp_path):
         {"FR Request Type": "Sponsorship", "Agenda Request Type": "Sponsorship", "FR Org Name": "B"},
     ])
     result = FinanceCommitteeWeekResult(
-        week="F7",
+        week="F07",
         meeting_date="2026-10-12",
         status="complete",
         fr=pd.DataFrame(),
@@ -359,7 +361,7 @@ def test_week_output_writes_contingency_artifact(tmp_path):
     )
 
     manifest_row = _write_finance_committee_week(result, tmp_path)
-    path = tmp_path / "F7_2026-10-12" / "F7_2026-10-12_contingency.csv"
+    path = tmp_path / "F07_2026-10-12" / "F07_2026-10-12_contingency.csv"
 
     assert path.is_file()
     assert manifest_row["contingency_rows"] == 1

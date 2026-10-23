@@ -95,7 +95,7 @@ def _bulk_context(db, tmp_path):
         period.id,
         tmp_path,
         role="FR",
-        week="F7",
+        week="F07",
         meeting_date=date(2026, 10, 12),
         org_name="Example Organization A",
     )
@@ -105,7 +105,7 @@ def _bulk_context(db, tmp_path):
         period.id,
         tmp_path,
         role="AGENDA",
-        week="F7",
+        week="F07",
         meeting_date=date(2026, 10, 12),
         org_name="Example Organization A",
     )
@@ -115,7 +115,7 @@ def _bulk_context(db, tmp_path):
         period.id,
         tmp_path,
         role="FR",
-        week="F8",
+        week="F08",
         meeting_date=date(2026, 10, 19),
         org_name="Example Organization B",
     )
@@ -136,7 +136,7 @@ def test_bulk_ficomm_run_creates_child_runs_and_parent_artifacts(db, tmp_path, m
         .order_by(ProcessingRun.meeting_week)
         .all()
     )
-    assert [child.meeting_week for child in children] == ["F7", "F8"]
+    assert [child.meeting_week for child in children] == ["F07", "F08"]
     assert all(child.status == "completed" for child in children)
     assert db.query(RunInput).filter(RunInput.run_id == bulk.id).count() == 3
 
@@ -151,8 +151,8 @@ def test_bulk_ficomm_run_creates_child_runs_and_parent_artifacts(db, tmp_path, m
     manifest_artifact = next(a for a in artifacts if a.artifact_type == "manifest")
     manifest = pd.read_csv(manifest_artifact.storage_path)
     assert set(manifest["status"]) == {"complete", "fr_only"}
-    assert set(manifest["week"]) == {"F7", "F8"}
-    assert int(manifest.loc[manifest["week"] == "F7", "contingency_rows"].iloc[0]) == 1
+    assert set(manifest["week"]) == {"F07", "F08"}
+    assert int(manifest.loc[manifest["week"] == "F07", "contingency_rows"].iloc[0]) == 1
 
     review_artifact = next(a for a in artifacts if a.artifact_type == "review_flags")
     review = pd.read_csv(review_artifact.storage_path)
@@ -179,7 +179,7 @@ def test_bulk_ficomm_run_rejects_duplicate_role_for_week(db, tmp_path, monkeypat
         period.id,
         tmp_path,
         role="FR",
-        week="F7",
+        week="F07",
         meeting_date=date(2026, 10, 12),
         org_name="Duplicate Organization",
     )
