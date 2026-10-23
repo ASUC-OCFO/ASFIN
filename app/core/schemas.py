@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
@@ -129,3 +130,72 @@ class PublishedVersionOut(BaseModel):
     is_latest: bool
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Queryable FiComm data
+# ---------------------------------------------------------------------------
+
+
+class FiCommRecordOut(BaseModel):
+    id: int
+    queryable_artifact_id: int
+    run_id: int
+    period_id: Optional[int]
+    source_row_number: int
+    meeting_week: str
+    meeting_date: date
+    is_contingency: bool
+    document_match_type: Optional[str]
+    document_match_score: Optional[float]
+    fr_org_name: Optional[str]
+    agenda_org_name: Optional[str]
+    fr_request_type: Optional[str]
+    agenda_request_type: Optional[str]
+    fr_appx: Optional[str]
+    fr_org_type_year: Optional[str]
+    fr_amount_requested: Optional[Decimal]
+    fr_amount: Optional[Decimal]
+    agenda_amount: Optional[Decimal]
+    fr_committee_status: Optional[str]
+    agenda_committee_status: Optional[str]
+    fr_funding_source: Optional[str]
+    fr_primary_contact: Optional[str]
+    fr_email_address: Optional[str]
+    fr_date: Optional[date]
+    agenda_date: Optional[date]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class FiCommRecordList(BaseModel):
+    items: List[FiCommRecordOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class FiCommReviewFlagOut(BaseModel):
+    id: int
+    queryable_artifact_id: int
+    run_id: int
+    period_id: Optional[int]
+    source_row_number: int
+    meeting_week: Optional[str]
+    meeting_date: Optional[date]
+    severity: str
+    code: str
+    message: str
+    source: Optional[str]
+    details: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class FiCommReviewFlagList(BaseModel):
+    items: List[FiCommReviewFlagOut]
+    total: int
+    page: int
+    page_size: int
