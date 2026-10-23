@@ -35,7 +35,7 @@ def _ficomm_context(db):
         dataset_id=dataset.id,
         period_id=period.id,
         source_role="FR",
-        meeting_week="F7",
+        meeting_week="F07",
         meeting_date=date(2026, 10, 12),
         original_filename="FR F7.xlsx",
         file_ext=".xlsx",
@@ -44,7 +44,7 @@ def _ficomm_context(db):
         dataset_id=dataset.id,
         period_id=period.id,
         source_role="AGENDA",
-        meeting_week="F7",
+        meeting_week="F07",
         meeting_date=date(2026, 10, 12),
         original_filename="Agenda F7.docx",
         file_ext=".docx",
@@ -61,7 +61,7 @@ def test_weekly_run_links_inputs_and_artifacts(db):
         dataset_id=dataset.id,
         period_id=period.id,
         run_type="weekly",
-        meeting_week="F7",
+        meeting_week="F07",
         meeting_date=date(2026, 10, 12),
     )
     db.add(run)
@@ -111,7 +111,7 @@ def test_bulk_run_can_parent_weekly_runs(db):
         period_id=period.id,
         parent_run_id=bulk.id,
         run_type="weekly",
-        meeting_week="F7",
+        meeting_week="F07",
         meeting_date=date(2026, 10, 12),
     )
     db.add(weekly)

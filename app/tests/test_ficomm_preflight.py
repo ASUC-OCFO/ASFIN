@@ -89,7 +89,7 @@ def test_ficomm_fr_upload_is_classified_and_assigned_to_open_period(db, tmp_path
 
     assert ingestion.period_id == period.id
     assert ingestion.source_role == "FR"
-    assert ingestion.meeting_week == "F7"
+    assert ingestion.meeting_week == "F07"
     assert ingestion.meeting_date == date(2026, 10, 12)
     assert Path(ingestion.raw_path).exists()
 
@@ -112,7 +112,7 @@ def test_ficomm_agenda_upload_is_classified_and_assigned_to_open_period(db, tmp_
 
     assert ingestion.period_id == period.id
     assert ingestion.source_role == "AGENDA"
-    assert ingestion.meeting_week == "F7"
+    assert ingestion.meeting_week == "F07"
     assert ingestion.meeting_date == date(2026, 10, 12)
 
 

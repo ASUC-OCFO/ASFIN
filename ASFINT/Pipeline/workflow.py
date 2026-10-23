@@ -91,7 +91,7 @@ def _normalize_week(value: Optional[str]) -> Optional[str]:
     match = re.search(r"\b([FS])\s*0*(\d{1,2})\b", str(value), re.I)
     if not match:
         return None
-    return f"{match.group(1).upper()}{int(match.group(2))}"
+    return f"{match.group(1).upper()}{int(match.group(2)):02d}"
 
 
 def _week_sort_key(week: str) -> tuple[int, int]:
